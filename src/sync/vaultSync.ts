@@ -984,7 +984,7 @@ export class VaultSync {
 
 	/**
 	 * Record a blob reference for a vault path. Called after a successful
-	 * R2 upload. Sets pathToBlob + blobMeta in a single transaction.
+	 * object storage upload. Sets pathToBlob + blobMeta in a single transaction.
 	 * Only sets blobMeta if the hash isn't already tracked (dedup).
 	 */
 	setBlobRef(
@@ -1033,7 +1033,7 @@ export class VaultSync {
 	/**
 	 * Tombstone-delete a blob path. Removes from pathToBlob and records
 	 * a tombstone to prevent resurrection from stale disk scans.
-	 * Does NOT delete the R2 blob (content-addressed = may be shared).
+	 * Does NOT delete the blob from object storage (content-addressed = may be shared).
 	 */
 	deleteBlobRef(path: string, device?: string): void {
 		path = this.normPath(path);

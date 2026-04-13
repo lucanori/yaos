@@ -222,7 +222,7 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 	/** Persisted blob hash cache: {path -> {mtime, size, hash}}. */
 	private blobHashCache: BlobHashCache = {};
 
-	/** True once we've shown the R2 nudge notice this session. */
+	/** True once we've shown the object storage nudge notice this session. */
 	private shownAttachmentNudge = false;
 
 	/** Persisted blob queue snapshot for crash resilience. */
@@ -468,10 +468,10 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 					}
 				}
 				const capabilityState = this.serverCapabilities;
-				const waitingForR2 =
+				const waitingForObjectStorage =
 					!!this.settings.host &&
 					(!capabilityState || !capabilityState.attachments || !capabilityState.snapshots);
-				if (waitingForR2 && Date.now() - this.lastCapabilityRefreshAt >= CAPABILITY_REFRESH_INTERVAL_MS) {
+				if (waitingForObjectStorage && Date.now() - this.lastCapabilityRefreshAt >= CAPABILITY_REFRESH_INTERVAL_MS) {
 					void this.refreshServerCapabilities("background-poll");
 				}
 			}, 3000);
@@ -1340,13 +1340,13 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 								this.log(`Create (blob): "${file.path}" unstable after timeout, skipping`);
 							}
 						});
-					} else if (!this.serverSupportsAttachments && !this.shownAttachmentNudge) {
-						this.shownAttachmentNudge = true;
-						new Notice(
-							"YAOS: This file won't sync yet — attachment sync needs a Cloudflare R2 bucket. Open YAOS settings for a 1-minute setup guide.",
-							10000,
-						);
-					}
+				} else if (!this.serverSupportsAttachments && !this.shownAttachmentNudge) {
+					this.shownAttachmentNudge = true;
+					new Notice(
+						"YAOS: This file won't sync yet — attachment sync needs object storage configured on your server. Open YAOS settings for more information.",
+						10000,
+					);
+				}
 				}
 			}),
 		);
@@ -1597,8 +1597,8 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 							`${result.index.blobFileCount} attachments ` +
 							`(${Math.round(result.index.crdtSizeBytes / 1024)} KB)`,
 						);
-					} else if (result.status === "unavailable") {
-						new Notice(`Snapshot unavailable: ${result.reason ?? "R2 not configured"}`);
+				} else if (result.status === "unavailable") {
+					new Notice(`Snapshot unavailable: ${result.reason ?? "object storage not configured"}`);
 					} else {
 						new Notice("Snapshot created.");
 					}
@@ -1691,7 +1691,7 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 
 	/**
 	 * When a note opens, parse its embedded links (![[...]]) via Obsidian's
-	 * metadata cache and prefetch any missing blob attachments from R2.
+	 * metadata cache and prefetch any missing blob attachments from object storage.
 	 * This ensures images/PDFs render immediately rather than waiting for
 	 * the next reconcile or CRDT observer to trigger the download.
 	 */
@@ -2858,19 +2858,19 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 			await this.refreshAttachmentSyncRuntime(`capability-change:${reason}`);
 		}
 
-		const gainedR2 = prevAttachments === false && nextAttachments === true;
-		const lostR2 = prevAttachments === true && nextAttachments === false;
-		if (gainedR2) {
+		const gainedObjectStorage = prevAttachments === false && nextAttachments === true;
+		const lostObjectStorage = prevAttachments === true && nextAttachments === false;
+		if (gainedObjectStorage) {
 			new Notice(
 				this.settings.enableAttachmentSync
-					? "YAOS: R2 backend detected. Attachments and snapshots are now available."
-					: "YAOS: R2 backend detected. Attachments and snapshots are available if you enable them in settings.",
+					? "YAOS: Object storage detected. Attachments and snapshots are now available."
+					: "YAOS: Object storage detected. Attachments and snapshots are available if you enable them in settings.",
 				7000,
 			);
 			if (this.vaultSync?.connected && this.vaultSync.providerSynced && this.serverSupportsSnapshots) {
 				void this.triggerDailySnapshot();
 			}
-			} else if (lostR2) {
+			} else if (lostObjectStorage) {
 				new Notice(
 					"Object storage is unavailable. Attachment transfers are paused and snapshots are unavailable.",
 					7000,
@@ -3896,7 +3896,7 @@ export default class VaultCrdtSyncPlugin extends Plugin {
 	/**
 	 * Request the daily snapshot from the server.
 	 * Called after provider syncs during startup.
-	 * Silent noop if R2 isn't configured or snapshot already taken today.
+	 * Silent noop if object storage isn't configured or snapshot already taken today.
 	 */
 	private async triggerDailySnapshot(): Promise<void> {
 		if (!this.serverSupportsSnapshots) {

@@ -7,7 +7,7 @@ import { randomBase64Url } from "./utils/base64url";
 export type ExternalEditPolicy = "always" | "closed-only" | "never";
 
 export interface VaultSyncSettings {
-	/** Cloudflare Worker host, e.g. "https://sync.yourdomain.com" */
+	/** Sync server host, e.g. "https://sync.yourdomain.com" */
 	host: string;
 	/** Shared secret token for auth. */
 	token: string;
@@ -28,7 +28,7 @@ export interface VaultSyncSettings {
 	 *   "never"       — never import (CRDT is sole source of truth)
 	 */
 	externalEditPolicy: ExternalEditPolicy;
-	/** Enable attachment (non-markdown) sync via R2 blob store. */
+	/** Enable attachment (non-markdown) sync via object storage. */
 	enableAttachmentSync: boolean;
 	/** True once the user has explicitly changed the attachment sync toggle. */
 	attachmentSyncExplicitlyConfigured: boolean;
@@ -63,7 +63,7 @@ export const DEFAULT_SETTINGS: VaultSyncSettings = {
 	updateRepoBranch: "main",
 };
 
-const CLOUDFLARE_DEPLOY_URL = "https://deploy.workers.cloudflare.com/?url=https://github.com/kavinsood/yaos/tree/main/server";
+const SERVER_DEPLOY_DOCS_URL = "https://github.com/kavinsood/yaos/blob/main/server/README.md";
 
 /** Generate a random vault ID (16 bytes, base64url). */
 export function generateVaultId(): string {
@@ -315,13 +315,13 @@ export class VaultSyncSettingTab extends PluginSettingTab {
 
 			new Setting(calloutContent)
 				.setName("Deploy your server")
-				.setDesc("Start one-click deployment in your browser.")
+				.setDesc("View deployment options in the documentation.")
 				.addButton((button) =>
 					button
-						.setButtonText("Open deploy page")
+						.setButtonText("Open deploy docs")
 						.setCta()
 						.onClick(() => {
-							window.open(CLOUDFLARE_DEPLOY_URL, "_blank", "noopener");
+							window.open(SERVER_DEPLOY_DOCS_URL, "_blank", "noopener");
 						}),
 				);
 		}
@@ -488,34 +488,34 @@ export class VaultSyncSettingTab extends PluginSettingTab {
 					.setDesc(
 						attachmentsAvailable
 							? "Available on this server. The plugin can sync attachments and snapshots."
-							: "Not available on this server. Add object storage in Cloudflare, then redeploy.",
+							: "Not available on this server. Configure object storage on your server.",
 					)
 					.addButton((button) =>
 						button
-						.setButtonText("Refresh")
-						.onClick(async () => {
-							button.setDisabled(true);
-							await this.plugin.refreshServerCapabilities();
-							await this.plugin.refreshAttachmentSyncRuntime("capability-refresh");
-							this.display();
-						}),
-				);
-		}
+							.setButtonText("Refresh")
+							.onClick(async () => {
+								button.setDisabled(true);
+								await this.plugin.refreshServerCapabilities();
+								await this.plugin.refreshAttachmentSyncRuntime("capability-refresh");
+								this.display();
+							}),
+					);
+			}
 
-				if (this.plugin.settings.host && !attachmentsAvailable) {
-					const callout = containerEl.createDiv({ cls: "yaos-settings-attachment-callout" });
-					callout.createEl("p", {
-						text: "Images, PDFs, and other attachments are not syncing yet.",
-					});
-					callout.createEl("p", {
-						text: "Add a Cloudflare R2 bucket to enable attachment sync. It takes about a minute.",
-					});
-					const link = callout.createEl("a", {
-						text: "Watch the 1-minute setup video",
-						href: "https://youtu.be/Z7xCMEYfdFM",
-					});
-					link.setAttr("target", "_blank");
-				}
+			if (this.plugin.settings.host && !attachmentsAvailable) {
+				const callout = containerEl.createDiv({ cls: "yaos-settings-attachment-callout" });
+				callout.createEl("p", {
+					text: "Images, PDFs, and other attachments are not syncing yet.",
+				});
+				callout.createEl("p", {
+					text: "Configure object storage (S3-compatible) on your server to enable attachment sync.",
+				});
+				const link = callout.createEl("a", {
+					text: "View server setup documentation",
+					href: SERVER_DEPLOY_DOCS_URL,
+				});
+				link.setAttr("target", "_blank");
+			}
 
 		if (attachmentsAvailable || !this.plugin.settings.host) {
 				new Setting(containerEl)

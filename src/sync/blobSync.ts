@@ -1,17 +1,17 @@
 /**
  * BlobSyncManager — handles upload/download of non-markdown attachments
- * via content-addressed R2 blob storage.
+ * via content-addressed object storage.
  *
  * Architecture:
- *   - Client hashes file bytes (SHA-256) and talks to the Worker directly
- *   - The Worker proxies bytes to native R2 bindings (no presigned URLs)
+ *   - Client hashes file bytes (SHA-256) and talks to the server directly
+ *   - The server proxies bytes to object storage (S3-compatible)
  *   - CRDT maps (pathToBlob, blobMeta, blobTombstones) track which blobs belong where
  *   - Two-phase commit: CRDT is only updated AFTER successful upload
  *   - Content-addressing provides automatic dedup across the vault
  *
  * Flow:
- *   Upload: detect change → hash → check exists → PUT to Worker → set CRDT
- *   Download: CRDT observer fires → check disk → GET from Worker → write disk
+ *   Upload: detect change → hash → check exists → PUT to server → set CRDT
+ *   Download: CRDT observer fires → check disk → GET from server → write disk
  */
 import { type App, TFile, normalizePath, requestUrl, arrayBufferToHex } from "obsidian";
 import type { VaultSync } from "./vaultSync";
@@ -685,7 +685,7 @@ export class BlobSyncManager {
 				return;
 			}
 
-			// Check if R2 already has this blob (content-addressed dedup)
+			// Check if object storage already has this blob (content-addressed dedup)
 			const present = await this.blobClient.exists([hash]);
 			if (!present.includes(hash)) {
 				// Need actual bytes for upload — read if we used cache
@@ -693,14 +693,14 @@ export class BlobSyncManager {
 					data = await this.app.vault.readBinary(file);
 				}
 
-				// Upload through the Worker
+				// Upload through the server
 				const mime = guessMime(item.path);
 				const uploadTimeoutMs = transferTimeoutMs(item.sizeBytes);
 				await this.blobClient.upload(hash, mime, data, uploadTimeoutMs);
 
 				this.log(`upload: "${item.path}" uploaded (${data.byteLength} bytes)`);
 			} else {
-				this.log(`upload: "${item.path}" already in R2 (dedup), updating CRDT only`);
+				this.log(`upload: "${item.path}" already in storage (dedup), updating CRDT only`);
 			}
 
 			// Two-phase commit: update CRDT only after successful upload

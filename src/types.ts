@@ -39,7 +39,7 @@ export interface BlobRef {
 }
 
 /**
- * Metadata for a content-addressed blob in R2.
+ * Metadata for a content-addressed blob in object storage.
  * Stored in blobMeta map: sha256 hex -> metadata.
  */
 export interface BlobMeta {
