@@ -1,0 +1,42 @@
+version: 2
+updates:
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: "cron"
+      cronjob: "0 14 * * 3"
+    groups:
+      security-updates:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: 'bun'
+    directory: '/'
+    schedule:
+      interval: "cron"
+      cronjob: "0 14 * * 3"
+    groups:
+      security-updates:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: "cron"
+      cronjob: "0 14 * * 3"
+    groups:
+      security-updates:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: 'docker-compose'
+    directory: '/'
+    schedule:
+      interval: "cron"
+      cronjob: "0 14 * * 3"
+    groups:
+      security-updates:
+        update-types:
+          - "minor"
+          - "patch"

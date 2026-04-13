@@ -1,62 +1,34 @@
-name: Release
+name: Automated Release
 
 on:
   push:
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
+    branches: [alpha, beta, main]
 
 permissions:
   contents: write
+  issues: write
+  actions: write
+  statuses: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
+    name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
+
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: oven-sh/setup-bun@v2
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          bun-version: latest
+          fetch-depth: 0
 
-      - run: bun install --frozen-lockfile
-      - run: cd server && bun install --frozen-lockfile && cd ..
-      - run: bun run build
-      - run: bun run build:server-release
-      - run: bun run test:ci
-      - run: cd server && bun run typecheck
-
-      # Sanity check: the tag must match manifest.json version
-      - name: Verify tag matches manifest version
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          MANIFEST_VERSION=$(bun -e "console.log(require('./manifest.json').version)")
-          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
-            echo "::error::Tag ($TAG) does not match manifest.json version ($MANIFEST_VERSION)"
-            exit 1
-          fi
-
-      - name: Create or update release
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v6
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          zip yaos.zip main.js manifest.json styles.css
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" \
-              yaos.zip \
-              dist/release-assets/yaos-server.zip \
-              dist/release-assets/update-manifest.json \
-              main.js \
-              manifest.json \
-              styles.css \
-              --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
-              --generate-notes \
-              yaos.zip \
-              dist/release-assets/yaos-server.zip \
-              dist/release-assets/update-manifest.json \
-              main.js \
-              manifest.json \
-              styles.css
-          fi
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}

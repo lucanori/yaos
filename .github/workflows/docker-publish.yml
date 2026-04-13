@@ -1,0 +1,220 @@
+name: Build and publish a Docker image to ghcr.io
+
+on:
+  release:
+    types: [published]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  extract_metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      attestation_supported: ${{ steps.attestation_check.outputs.supported }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check if attestations are supported
+        id: attestation_check
+        run: |
+          if [[ "${{ github.event.repository.visibility }}" == "public" ]] || [[ "${{ github.repository_owner }}" == "enterprise-cloud-org" ]]; then
+            echo "supported=true" >> $GITHUB_OUTPUT
+          else
+            echo "supported=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=alpha,enable=${{ github.event.release.prerelease == true && contains(github.event.release.tag_name, 'alpha') }}
+            type=raw,value=beta,enable=${{ github.event.release.prerelease == true && contains(github.event.release.tag_name, 'beta') }}
+            type=raw,value=latest,enable=${{ github.event.release.prerelease == false }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=${{ github.repository }}
+            org.opencontainers.image.description=${{ github.event.repository.description || 'No repository description provided' }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+
+  docker_publish:
+    needs: extract_metadata
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check registry cache availability
+        id: cache_check
+        run: |
+          CACHE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-${{ matrix.arch }}"
+          if docker buildx imagetools inspect "$CACHE_REF" > /dev/null 2>&1; then
+            echo "registry_cache_from=type=registry,ref=$CACHE_REF" >> "$GITHUB_OUTPUT"
+            echo "Registry cache available - will be used"
+          else
+            echo "registry_cache_from=" >> "$GITHUB_OUTPUT"
+            echo "Registry cache unavailable - will be skipped"
+          fi
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ needs.extract_metadata.outputs.labels }}
+          cache-from: |
+            type=gha
+            ${{ steps.cache_check.outputs.registry_cache_from }}
+          cache-to: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-${{ matrix.arch }},mode=max,ignore-error=true
+            type=gha,mode=max
+          provenance: ${{ needs.extract_metadata.outputs.attestation_supported }}
+          sbom: ${{ needs.extract_metadata.outputs.attestation_supported }}
+
+      - name: Save digest to file
+        run: |
+          echo "${{ steps.build.outputs.digest }}" > digest-${{ matrix.arch }}.txt
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-digests-${{ matrix.arch }}
+          path: digest-${{ matrix.arch }}.txt
+          if-no-files-found: error
+
+      - name: Generate build attestation
+        if: ${{ needs.extract_metadata.outputs.attestation_supported == 'true' }}
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  docker_manifest:
+    needs: [extract_metadata, docker_publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: image-digests-*
+          path: image-digests
+          merge-multiple: true
+
+      - name: Create multi-arch manifest
+        run: |
+          DIGEST_ARGS=""
+          for digest_file in image-digests/digest-*.txt; do
+            if [[ -f "$digest_file" ]]; then
+              digest=$(cat "$digest_file")
+              DIGEST_ARGS="$DIGEST_ARGS ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${digest}"
+            fi
+          done
+
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then
+              echo "Creating manifest for tag: $tag"
+              docker buildx imagetools create -t "$tag" $DIGEST_ARGS
+            fi
+          done <<< "${{ needs.extract_metadata.outputs.tags }}"
+
+  notify:
+    needs: docker_manifest
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send kChat notification
+        run: |
+          STATUS="${{ needs.docker_manifest.result }}"
+          REPO="${{ github.repository }}"
+          TAG="${{ github.event.release.tag_name }}"
+          SHA="${{ github.sha }}"
+
+          if [[ "$STATUS" == "success" ]]; then
+            EMOJI="✅"
+            MESSAGE="Docker image build completed successfully"
+          else
+            EMOJI="❌"
+            MESSAGE="Docker image build failed"
+          fi
+
+          if [[ -z "${{ secrets.KCHAT_WEBHOOK_URL }}" ]]; then
+            echo "kChat notification skipped: KCHAT_WEBHOOK_URL secret not set"
+            exit 0
+          fi
+
+          PAYLOAD=$(cat <<'EOF'
+          {
+            "text": "EMOJI_PLACEHOLDER MESSAGE_PLACEHOLDER\n\nRepository: REPO_PLACEHOLDER\nTag: TAG_PLACEHOLDER\nCommit: SHA_PLACEHOLDER\nStatus: STATUS_PLACEHOLDER"
+          }
+          EOF
+          )
+
+          PAYLOAD="${PAYLOAD//EMOJI_PLACEHOLDER/$EMOJI}"
+          PAYLOAD="${PAYLOAD//MESSAGE_PLACEHOLDER/$MESSAGE}"
+          PAYLOAD="${PAYLOAD//REPO_PLACEHOLDER/$REPO}"
+          PAYLOAD="${PAYLOAD//TAG_PLACEHOLDER/$TAG}"
+          PAYLOAD="${PAYLOAD//SHA_PLACEHOLDER/$SHA}"
+          PAYLOAD="${PAYLOAD//STATUS_PLACEHOLDER/$STATUS}"
+
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "${{ secrets.KCHAT_WEBHOOK_URL }}"
