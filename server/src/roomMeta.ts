@@ -1,38 +1,40 @@
+import type { StorageLike, TransactionLike } from "./storage/postgres";
+
 export const ROOM_META_KEY = "roomMeta";
 
 export interface RoomMeta {
-	schemaVersion: number | null;
-	updatedAt: string;
+  schemaVersion: number | null;
+  updatedAt: string;
 }
 
 interface RoomMetaStorageLike {
-	get<T = unknown>(key: string): Promise<T | undefined>;
-	put<T>(key: string, value: T): Promise<void>;
+  get<T = unknown>(key: string): Promise<T | undefined>;
+  put<T>(key: string, value: T): Promise<void>;
 }
 
 export function isRoomMeta(value: unknown): value is RoomMeta {
-	if (typeof value !== "object" || value === null) return false;
-	const meta = value as RoomMeta;
-	if (meta.schemaVersion !== null && (!Number.isInteger(meta.schemaVersion) || meta.schemaVersion < 0)) {
-		return false;
-	}
-	if (typeof meta.updatedAt !== "string" || meta.updatedAt.length === 0) {
-		return false;
-	}
-	return true;
+  if (typeof value !== "object" || value === null) return false;
+  const meta = value as RoomMeta;
+  if (meta.schemaVersion !== null && (!Number.isInteger(meta.schemaVersion) || meta.schemaVersion < 0)) {
+    return false;
+  }
+  if (typeof meta.updatedAt !== "string" || meta.updatedAt.length === 0) {
+    return false;
+  }
+  return true;
 }
 
 export async function readRoomMeta(
-	storage: RoomMetaStorageLike,
+  storage: RoomMetaStorageLike | StorageLike | TransactionLike,
 ): Promise<RoomMeta | null> {
-	const raw = await storage.get<unknown>(ROOM_META_KEY);
-	if (!isRoomMeta(raw)) return null;
-	return raw;
+  const raw = await storage.get<unknown>(ROOM_META_KEY);
+  if (!isRoomMeta(raw)) return null;
+  return raw;
 }
 
 export async function writeRoomMeta(
-	storage: RoomMetaStorageLike,
-	meta: RoomMeta,
+  storage: RoomMetaStorageLike | StorageLike | TransactionLike,
+  meta: RoomMeta,
 ): Promise<void> {
-	await storage.put(ROOM_META_KEY, meta);
+  await (storage as StorageLike).put({ [ROOM_META_KEY]: meta });
 }

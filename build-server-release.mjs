@@ -69,7 +69,7 @@ const serverZipManifest = {
 	updateOwnedPaths: [
 		".gitlab-ci.yml",
 		"package.json",
-		"package-lock.json",
+		"bun.lock",
 		"scripts",
 		"tsconfig.json",
 		"src",
@@ -82,7 +82,7 @@ mkdirSync(serverTempDir, { recursive: true });
 
 for (const relativePath of [
 	"package.json",
-	"package-lock.json",
+	"bun.lock",
 	".gitlab-ci.yml",
 	"scripts",
 	"tsconfig.json",

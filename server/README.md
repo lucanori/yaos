@@ -1,79 +1,42 @@
 # YAOS server
 
-Cloudflare Worker server for the YAOS Obsidian plugin. It relays Yjs CRDT updates through a Durable Object and stores attachments plus snapshots in R2.
+Self-hosted sync server for the YAOS Obsidian plugin. Built with Bun, PostgreSQL, and S3-compatible storage.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/kavinsood/yaos/tree/main/server)
+## Quick start
+
+```bash
+cd server
+bun install
+cp .env.example .env
+# Edit .env with your configuration
+bun run db:migrate
+bun run dev
+```
+
+See [SELF_HOSTED.md](./SELF_HOSTED.md) for complete documentation.
 
 ## Architecture
 
-- One vault maps to one Durable Object-backed sync room.
-- Yjs sync runs through `y-partyserver`.
-- Durable Object storage persists the live CRDT snapshot.
-- Attachments are uploaded through the Worker and stored in R2.
-- Snapshots are gzipped CRDT archives stored in R2.
+- One vault maps to one sync room managed in-memory.
+- Yjs sync runs through `y-partyserver` protocol.
+- PostgreSQL persists document checkpoints and journals.
+- Attachments are uploaded through the server and stored in S3-compatible storage.
+- Snapshots are gzipped CRDT archives stored in S3-compatible storage.
 - Auth uses the claimed setup token by default, with `SYNC_TOKEN` as an optional hard override.
 
-## Local development
+## Development
 
 ```bash
-cd server
-npm install
-npm run dev -- --var SYNC_TOKEN:dev-sync-token
+# Type checking
+bun run typecheck
+
+# Run development server with hot reload
+bun run dev
+
+# Run tests
+bun run test:integration
+bun run test:smoke
 ```
-
-The local Worker will be served by Wrangler. Use its printed local URL as the plugin's **Server host**.
-
-Passing `SYNC_TOKEN` locally is optional. If you omit it, the server starts unclaimed and you can claim it in a browser.
-
-## Deploy to Cloudflare
-
-Use the **Deploy to Cloudflare** button above for the default setup. It targets the `server/` subdirectory so Cloudflare treats this folder as the project root.
-This repo intentionally keeps `.env.example` free of assignments so the deploy flow does not prompt for `SYNC_TOKEN` by default.
-
-The local `wrangler.toml` in this directory defines:
-
-- the Worker entrypoint (`server/src/index.ts`)
-- the `VaultSyncServer` Durable Object binding
-- the `ServerConfig` Durable Object binding
-
-The default deploy is text-only:
-
-- no `SYNC_TOKEN` secret is required up front
-- no R2 binding is required up front
-- the first browser visit shows the claim page
-
-That claim page generates a token in the browser and returns an `obsidian://yaos?...` setup link you can use to configure the plugin.
-
-### How updates work after deploy
-
-The Deploy to Cloudflare button creates a new repository in your own Git account and connects this Worker to that new repo.
-
-That means future pushes to your generated repo will redeploy automatically, but future pushes to the original `kavinsood/yaos` template repo will not update your existing Worker on their own.
-
-To pick up new YAOS changes later:
-
-1. Add your generated repo URL in the plugin settings (`Deployment repo URL`).
-2. Use **Initialize updater** once (GitHub) if workflows are missing.
-3. Use **Open update action** from plugin settings and run the update workflow.
-4. Cloudflare redeploys automatically after the workflow push.
-
-### Manual CLI deploy
-
-```bash
-cd server
-npm install
-npm run deploy
-```
-
-### Optional post-deploy R2 setup
-
-If you want attachments and snapshots later:
-
-1. Create an R2 bucket in the Cloudflare dashboard.
-2. Open your Worker in **Workers & Pages**.
-3. Add an R2 binding named `YAOS_BUCKET`.
-
-The same Worker will then begin reporting attachments and snapshots as available.
 
 ## Endpoints
 
@@ -107,8 +70,17 @@ If you set `SYNC_TOKEN`, that environment value becomes the required token inste
 - Blob uploads are capped at 10 MB by default.
 - Blob existence checks use bounded concurrency.
 - Snapshot creation is daily-idempotent through the `/snapshots/maybe` route.
-- Snapshot archives are stored compressed to keep R2 usage modest.
+- Snapshot archives are stored compressed to keep storage usage modest.
 
-## Deploy button note
+## Legacy Cloudflare Workers path
 
-The canonical infrastructure config lives in this `server/` directory, and the Deploy to Cloudflare button should target the `server/` subdirectory path in GitHub.
+The repository retains Cloudflare Workers configuration (`wrangler.toml`, etc.) for historical reference and comparison. The active self-hosted implementation replaces the Cloudflare-specific architecture with:
+
+- **Runtime**: Bun (instead of Cloudflare Workers)
+- **Primary Storage**: PostgreSQL (instead of Durable Objects)
+- **Object Storage**: Any S3-compatible service (instead of Cloudflare R2)
+- **WebSocket**: Native Bun WebSocket support (instead of partyserver on Workers)
+
+## License
+
+Same as the main YAOS project.

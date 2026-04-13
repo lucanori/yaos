@@ -1,15 +1,17 @@
 {
-	"compilerOptions": {
-		"target": "ES2022",
-		"module": "ESNext",
-		"moduleResolution": "bundler",
-		"strict": true,
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"outDir": "dist",
-		"rootDir": "src",
-		"lib": ["ES2022"],
-		"types": ["@cloudflare/workers-types"]
-	},
-	"include": ["src/**/*.ts"]
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "lib": ["ES2022"],
+    "types": ["bun-types", "pg", "ws", "node"],
+    "typeRoots": ["./node_modules/@types", "./node_modules"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/index.ts", "src/server.ts", "src/config.ts", "src/test/**"]
 }
