@@ -144,29 +144,23 @@ async function main() {
 	try {
 		await waitForWorker();
 		const token = await resolveAuthToken(envToken);
-		await runCommand("node", [
+		await runCommand("bun", [
 			"tests/schema-guard.mjs",
 		], token);
-		await runCommand("node", [
-			"--import",
-			"jiti/register",
+		await runCommand("bun", [
 			"tests/sync-client.ts",
 			"smoke.md",
 			"\n\nhello from worker integration pass 1",
 		], token);
-		await runCommand("node", [
-			"--import",
-			"jiti/register",
+		await runCommand("bun", [
 			"tests/sync-client.ts",
 			"smoke.md",
 			"\n\nhello from worker integration pass 2",
 		], token);
-		await runCommand("node", [
-			"--import",
-			"jiti/register",
+		await runCommand("bun", [
 			"tests/snapshots.ts",
 		], token);
-		await runCommand("node", [
+		await runCommand("bun", [
 			"tests/hardening-worker.mjs",
 		], token);
 	} catch (err) {

@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 
 const diffModule = await import("../src/sync/diff.ts");
-const { applyDiffToYText } = diffModule.default;
+const { applyDiffToYText } = diffModule.default ?? diffModule;
 
 let passed = 0;
 let failed = 0;
