@@ -5,10 +5,8 @@
 *.iml
 .idea
 
-# npm / bun
+# dependencies
 node_modules
-bun.lock
-server/bun.lock
 
 # Don't include the compiled main.js file in the repo.
 # They should be uploaded to GitHub releases instead.
@@ -31,3 +29,6 @@ server/.env
 .wrangler
 server/.partykit
 server/.wrangler
+
+# Substrate traces
+substrate/traces/status/
