@@ -3,7 +3,7 @@
 	"name": "YAOS",
 	"version": "1.5.1",
 	"minAppVersion": "1.5.0",
-	"description": "A zero-terminal, real-time sync engine powered by your own Cloudflare Worker.",
+	"description": "A zero-terminal, real-time sync engine powered by your own sync server.",
 	"author": "Kavin",
 	"authorUrl": "https://github.com/kavinsood",
 	"isDesktopOnly": false

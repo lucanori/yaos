@@ -31,7 +31,7 @@ Order-of-magnitude effect:
 Very large vaults are still constrained by:
 
 - CPU cost for `Y.encodeStateAsUpdate()` and merge/apply work.
-- Durable Object memory pressure on cold start/replay.
+- Server memory pressure (rooms stay in memory; no hibernation equivalent).
 - Client-side parse/apply latency (especially mobile), even if transport limits are higher.
 
 In practice, compute and memory behavior usually become the first bottlenecks before raw storage capacity for CRDTs.
