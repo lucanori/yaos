@@ -14,23 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: npm
+          bun-version: latest
 
-      - run: npm ci
-      - run: npm ci --prefix server
-      - run: npm run build
-      - run: npm run build:server-release
-      - run: npm run test:ci
-      - run: npm --prefix server run typecheck
+      - run: bun install --frozen-lockfile
+      - run: cd server && bun install --frozen-lockfile && cd ..
+      - run: bun run build
+      - run: bun run build:server-release
+      - run: bun run test:ci
+      - run: cd server && bun run typecheck
 
       # Sanity check: the tag must match manifest.json version
       - name: Verify tag matches manifest version
         run: |
           TAG="${GITHUB_REF_NAME}"
-          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          MANIFEST_VERSION=$(bun -e "console.log(require('./manifest.json').version)")
           if [ "$TAG" != "$MANIFEST_VERSION" ]; then
             echo "::error::Tag ($TAG) does not match manifest.json version ($MANIFEST_VERSION)"
             exit 1
