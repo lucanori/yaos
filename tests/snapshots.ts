@@ -6,11 +6,11 @@
  *   - Diff between snapshot and modified doc
  *   - Soft restore (content replace + undelete + blob re-point)
  *
- * Category 2: Live server endpoints (needs a claimed server; snapshot/blob
- * subtests additionally need R2)
+ * Category 2: Live self-hosted server endpoints (needs a claimed server; snapshot/blob
+ * subtests additionally need storage bindings)
  *   - Auth rejection
  *   - /vault/:vaultId/snapshots, /vault/:vaultId/snapshots/maybe
- *   - Download actual snapshot payload from the Worker
+ *   - Download actual snapshot payload from the server
  *   - /vault/:vaultId/blobs/:hash and /vault/:vaultId/blobs/exists
  *
  * Usage:
@@ -44,10 +44,10 @@ try {
 		}
 	}
 } catch {
-	console.warn("Could not read server/.env — falling back to process env for live endpoint tests.");
+	console.warn("Could not read server/.env — falling back to process env for self-hosted runtime tests.");
 }
 
-const HOST = process.env.YAOS_TEST_HOST ?? envVars.YAOS_TEST_HOST ?? "http://127.0.0.1:8787";
+const HOST = process.env.YAOS_TEST_HOST ?? envVars.YAOS_TEST_HOST ?? "http://127.0.0.1:3000";
 const TOKEN = process.env.SYNC_TOKEN ?? envVars.SYNC_TOKEN ?? "";
 const TEST_VAULT_ID =
 	process.env.YAOS_TEST_VAULT_ID
@@ -487,7 +487,7 @@ async function serverGetBytes(
 
 async function testCategory2(): Promise<void> {
 	console.log("\n═══════════════════════════════════════════════");
-	console.log("CATEGORY 2: Live server endpoints");
+	console.log("CATEGORY 2: Live self-hosted server endpoints");
 	console.log(`  Host: ${HOST}`);
 	console.log(`  Vault: ${TEST_VAULT_ID}`);
 	console.log("═══════════════════════════════════════════════\n");
@@ -500,7 +500,7 @@ async function testCategory2(): Promise<void> {
 	const capabilities = await serverGetCapabilities();
 	assertEqual(capabilities.status, 200, "capabilities returns 200");
 	if (capabilities.data?.claimed === false) {
-		console.log("  SKIPPED: server is unclaimed");
+		console.log("  SKIPPED: self-hosted server is unclaimed");
 		return;
 	}
 
@@ -519,7 +519,7 @@ async function testCategory2(): Promise<void> {
 		assertEqual(res2.status, 401, "Missing token returns 401");
 	}
 	if (!capabilities.data?.snapshots || !capabilities.data?.attachments) {
-		console.log("  SKIPPED: R2 binding is not configured for this server");
+		console.log("  SKIPPED: storage bindings are not configured for this self-hosted server");
 		return;
 	}
 
@@ -527,7 +527,7 @@ async function testCategory2(): Promise<void> {
 	console.log("\n--- Seeding room with test data via WebSocket ---");
 	{
 		// These endpoints work even with an empty room.
-		// The Durable Object will be created on first request.
+		// The room will be created on first request.
 		console.log("  (Using empty room — snapshot will have 0 files, which is valid)");
 	}
 
@@ -574,7 +574,7 @@ async function testCategory2(): Promise<void> {
 	}
 
 	// --- Test: Download actual snapshot payload ---
-	console.log("\n--- Test: Download snapshot payload from Worker ---");
+	console.log("\n--- Test: Download snapshot payload from server ---");
 	if (snapshotId) {
 		const { status, bytes } = await serverGetBytes(`snapshots/${snapshotId}`);
 		assertEqual(status, 200, "snapshot payload GET returns 200");
@@ -609,7 +609,7 @@ async function testCategory2(): Promise<void> {
 			.join("")
 			.padEnd(64, "0");
 
-		// 1. Direct PUT through the Worker
+		// 1. Direct PUT through the server
 		const putResult = await serverPutBytes(`blobs/${fakeHash}`, testData, "text/plain");
 		assertEqual(putResult.status, 204, "blob PUT returns 204");
 
@@ -627,7 +627,7 @@ async function testCategory2(): Promise<void> {
 			"non-existent blob not found (correct)",
 		);
 
-		// 3. Direct GET through the Worker
+		// 3. Direct GET through the server
 		const downloadRes = await serverGetBytes(`blobs/${fakeHash}`);
 		assertEqual(downloadRes.status, 200, "blob GET returns 200");
 		assertEqual(downloadRes.bytes.byteLength, testData.byteLength, "downloaded size matches");

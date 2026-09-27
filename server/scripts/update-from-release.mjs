@@ -4,13 +4,15 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	lstatSync,
 	readFileSync,
+	readdirSync,
 	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, normalize, posix, relative, resolve, sep, win32 } from "node:path";
 
 const defaultReleaseRepo = "kavinsood/yaos";
 const releaseRepo = process.env.YAOS_RELEASE_REPO?.trim() || defaultReleaseRepo;
@@ -38,90 +40,6 @@ const extractDir = join(tempDir, "extract");
 const protectedPrefixes = [".github", ".github/"];
 const allowMigrationUpdate = process.env.YAOS_ALLOW_MIGRATION_UPDATE?.trim().toLowerCase() === "true";
 
-function collectTomlArrayBindingValues(source, sectionName, keyName) {
-	const values = new Set();
-	const escapedSection = sectionName.replaceAll(".", "\\.");
-	const blockRegex = new RegExp(`\\[\\[${escapedSection}\\]\\]([\\s\\S]*?)(?=\\n\\[\\[|\\n\\[|$)`, "g");
-	let blockMatch;
-	while ((blockMatch = blockRegex.exec(source)) !== null) {
-		const block = blockMatch[1];
-		const keyRegex = new RegExp(`^\\s*${keyName}\\s*=\\s*"([^"]+)"`, "m");
-		const keyMatch = block.match(keyRegex);
-		if (keyMatch?.[1]) {
-			values.add(keyMatch[1].trim());
-		}
-	}
-	return values;
-}
-
-function collectTomlVarsKeys(source) {
-	const keys = new Set();
-	const lines = source.split(/\r?\n/);
-	const start = lines.findIndex((line) => line.trim() === "[vars]");
-	if (start < 0) return keys;
-	for (let i = start + 1; i < lines.length; i++) {
-		const line = lines[i];
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		if (trimmed.startsWith("[")) break;
-		const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-		if (match?.[1]) {
-			keys.add(match[1].trim());
-		}
-	}
-	return keys;
-}
-
-function missingItems(requiredSet, existingSet) {
-	const missing = [];
-	for (const value of requiredSet) {
-		if (!existingSet.has(value)) {
-			missing.push(value);
-		}
-	}
-	return missing.sort();
-}
-
-function collectWranglerDriftWarnings(localWranglerPath, upstreamWranglerPath) {
-	if (!existsSync(localWranglerPath) || !existsSync(upstreamWranglerPath)) {
-		return [];
-	}
-
-	const localSource = readFileSync(localWranglerPath, "utf8");
-	const upstreamSource = readFileSync(upstreamWranglerPath, "utf8");
-	const checks = [
-		{ label: "Durable Object bindings", section: "durable_objects.bindings", key: "name" },
-		{ label: "R2 bindings", section: "r2_buckets", key: "binding" },
-		{ label: "KV bindings", section: "kv_namespaces", key: "binding" },
-		{ label: "D1 bindings", section: "d1_databases", key: "binding" },
-		{ label: "Service bindings", section: "services", key: "binding" },
-		{ label: "Queue producer bindings", section: "queues.producers", key: "binding" },
-		{ label: "Queue consumer names", section: "queues.consumers", key: "queue" },
-	];
-
-	const warnings = [];
-	for (const check of checks) {
-		const upstreamValues = collectTomlArrayBindingValues(upstreamSource, check.section, check.key);
-		if (upstreamValues.size === 0) continue;
-		const localValues = collectTomlArrayBindingValues(localSource, check.section, check.key);
-		const missing = missingItems(upstreamValues, localValues);
-		if (missing.length > 0) {
-			warnings.push(`${check.label} missing locally: ${missing.join(", ")}`);
-		}
-	}
-
-	const upstreamVars = collectTomlVarsKeys(upstreamSource);
-	if (upstreamVars.size > 0) {
-		const localVars = collectTomlVarsKeys(localSource);
-		const missingVars = missingItems(upstreamVars, localVars);
-		if (missingVars.length > 0) {
-			warnings.push(`vars keys missing locally: ${missingVars.join(", ")}`);
-		}
-	}
-
-	return warnings;
-}
-
 function resolveArtifactSource(input) {
 	if (/^https?:\/\//i.test(input)) {
 		return { type: "remote", label: input, value: input };
@@ -133,6 +51,102 @@ function resolveArtifactSource(input) {
 		throw new Error(`Local YAOS server artifact was not found: ${filePath}`);
 	}
 	return { type: "local", label: String(filePath), value: String(filePath) };
+}
+
+function normalizeManifestOwnedPath(relativePath) {
+	if (typeof relativePath !== "string" || relativePath.trim() === "") {
+		throw new Error(`Invalid update-owned path in artifact: ${String(relativePath)}`);
+	}
+	if (relativePath.includes("\0")) {
+		throw new Error(`Invalid update-owned path in artifact: ${relativePath}`);
+	}
+	if (relativePath.includes("\\")) {
+		throw new Error(`Invalid update-owned path in artifact: ${relativePath}`);
+	}
+	if (posix.isAbsolute(relativePath) || win32.isAbsolute(relativePath)) {
+		throw new Error(`Invalid update-owned path in artifact: ${relativePath}`);
+	}
+	if (relativePath.split("/").some((segment) => segment === "..")) {
+		throw new Error(`Invalid update-owned path in artifact: ${relativePath}`);
+	}
+	const normalizedPath = normalize(relativePath).replaceAll("\\", "/");
+	if (normalizedPath === ".") {
+		throw new Error(`Invalid update-owned path in artifact: ${relativePath}`);
+	}
+	const segments = normalizedPath.split("/");
+	if (segments.some((segment) => segment === "")) {
+		throw new Error(`Invalid update-owned path in artifact: ${relativePath}`);
+	}
+	return normalizedPath;
+}
+
+function resolveManifestOwnedPath(rootPath, relativePath) {
+	const normalizedPath = normalizeManifestOwnedPath(relativePath);
+	const absolutePath = resolve(rootPath, normalizedPath);
+	const rootRelativePath = relative(rootPath, absolutePath);
+	if (
+		rootRelativePath.startsWith("..") ||
+		posix.isAbsolute(rootRelativePath) ||
+		win32.isAbsolute(rootRelativePath)
+	) {
+		throw new Error(`Update-owned path escapes root: ${relativePath}`);
+	}
+	return { absolutePath, normalizedPath };
+}
+
+function assertNoSymlinkTraversal(rootPath, absolutePath, displayPath) {
+	const rootRelativePath = relative(rootPath, absolutePath);
+	const pathSegments = rootRelativePath.split(sep).filter(Boolean);
+	let currentPath = rootPath;
+	for (const segment of pathSegments) {
+		currentPath = join(currentPath, segment);
+		if (existsSync(currentPath) && lstatSync(currentPath).isSymbolicLink()) {
+			throw new Error(`Unsafe symlink entry in update-owned path: ${displayPath}`);
+		}
+	}
+}
+
+function assertSafeSourceTree(sourcePath, displayPath) {
+	const sourceStats = lstatSync(sourcePath);
+	if (sourceStats.isSymbolicLink()) {
+		throw new Error(`Unsafe symlink entry in update-owned path: ${displayPath}`);
+	}
+	if (sourceStats.isDirectory()) {
+		for (const entry of readdirSync(sourcePath, { withFileTypes: true })) {
+			const childPath = join(sourcePath, entry.name);
+			const childDisplayPath = `${displayPath}/${entry.name}`;
+			if (entry.isSymbolicLink()) {
+				throw new Error(`Unsafe symlink entry in update-owned path: ${childDisplayPath}`);
+			}
+			if (entry.isDirectory()) {
+				assertSafeSourceTree(childPath, childDisplayPath);
+				continue;
+			}
+			if (!entry.isFile()) {
+				throw new Error(`Unsupported update-owned entry type in artifact: ${childDisplayPath}`);
+			}
+		}
+		return;
+	}
+	if (!sourceStats.isFile()) {
+		throw new Error(`Unsupported update-owned entry type in artifact: ${displayPath}`);
+	}
+}
+
+function applyUpdateOwnedPath(relativePath) {
+	const { absolutePath: sourcePath, normalizedPath } = resolveManifestOwnedPath(extractDir, relativePath);
+	const { absolutePath: targetPath } = resolveManifestOwnedPath(repoRoot, relativePath);
+	assertNoSymlinkTraversal(extractDir, sourcePath, normalizedPath);
+	assertNoSymlinkTraversal(repoRoot, targetPath, normalizedPath);
+	assertSafeSourceTree(sourcePath, normalizedPath);
+	rmSync(targetPath, { recursive: true, force: true });
+	const sourceStats = statSync(sourcePath);
+	if (sourceStats.isDirectory()) {
+		cpSync(sourcePath, targetPath, { recursive: true });
+		return;
+	}
+	mkdirSync(dirname(targetPath), { recursive: true });
+	cpSync(sourcePath, targetPath);
 }
 
 async function stageArtifactZip() {
@@ -180,42 +194,22 @@ async function main() {
 		throw new Error(
 			[
 				"STOP: this YAOS release is marked as migration-required.",
-				"Automatic updates are disabled for migration-required releases to protect Durable Object/SQLite state.",
+				"Automatic updates are disabled for migration-required releases to protect self-hosted server state.",
 				"Read the upgrade guide and apply the migration manually before re-running this updater.",
 				"If you intentionally want to bypass this guard, set YAOS_ALLOW_MIGRATION_UPDATE=true.",
 			].join(" "),
 		);
 	}
-	const wranglerWarnings = collectWranglerDriftWarnings(
-		join(repoRoot, "wrangler.toml"),
-		join(extractDir, "wrangler.toml"),
-	);
-	if (wranglerWarnings.length > 0) {
-		console.warn("WARNING: wrangler.toml drift detected relative to this release:");
-		for (const warning of wranglerWarnings) {
-			console.warn(`  - ${warning}`);
-		}
-		console.warn("Update completed, but your Cloudflare bindings may need manual wrangler.toml edits.");
-	}
 
 	for (const relativePath of rawManifest.updateOwnedPaths) {
-		if (typeof relativePath !== "string" || !relativePath) {
+		if (typeof relativePath !== "string" || relativePath.trim() === "") {
 			throw new Error(`Invalid update-owned path in artifact: ${String(relativePath)}`);
 		}
 		if (protectedPrefixes.some((prefix) => relativePath === prefix || relativePath.startsWith(prefix))) {
 			console.log(`Skipping protected path ${relativePath}`);
 			continue;
 		}
-		const sourcePath = join(extractDir, relativePath);
-		const targetPath = join(repoRoot, relativePath);
-		rmSync(targetPath, { recursive: true, force: true });
-		const sourceStats = statSync(sourcePath);
-		if (sourceStats.isDirectory()) {
-			cpSync(sourcePath, targetPath, { recursive: true });
-		} else {
-			mkdirSync(dirname(targetPath), { recursive: true });
-			cpSync(sourcePath, targetPath);
-		}
+		applyUpdateOwnedPath(relativePath);
 		console.log(`Updated ${relativePath}`);
 	}
 

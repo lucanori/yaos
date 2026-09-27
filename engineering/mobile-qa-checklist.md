@@ -72,15 +72,18 @@ When to redeploy:
 ## Deployment guidance (before running anything)
 
 1. Plugin build:
+
 - Always install the latest local plugin build on the desktop test vault.
 - For divergence test in Run A, keep mobile on older build intentionally.
 
-2. Worker deploy:
+1. Worker deploy:
+
 - If server code changed since last deploy, redeploy Worker before Run B.
 - For Run A migration-only drill, redeploy is optional unless you specifically
   want latest server trace markers in `/debug/recent`.
 
-3. Diagnostics command usage:
+1. Diagnostics command usage:
+
 - Use `YAOS: Export sync diagnostics` at each marked checkpoint.
 - Name or note each export by phase in your test notes.
 
@@ -94,16 +97,17 @@ When to redeploy:
 3. Confirm both devices point to the same `host` and intended `vaultId`.
 4. Confirm current schema before migration:
    - Export diagnostics and verify:
-    - `state.schema.supportedByClient` is `2` on desktop plugin
-    - Branch:
-      - If `state.schema.storedInDoc` is `1`: run full Run A migration drill.
-      - If `state.schema.storedInDoc` is `2`: migration already happened; run
-        divergence guard only (Phase 3) using an intentionally old client.
+      - `state.schema.supportedByClient` is `2` on desktop plugin
+      - Branch:
+         - If `state.schema.storedInDoc` is `1`: run full Run A migration drill.
+         - If `state.schema.storedInDoc` is `2`: migration already happened; run
+           divergence guard only (Phase 3) using an intentionally old client.
 5. Clear old mental context by exporting a baseline diagnostics file on both:
    - `YAOS: Export sync diagnostics`
 6. Start a test notes log with timestamps for each phase transition.
 
 Pass criteria:
+
 - both devices start from known-good config and baseline diagnostics exist.
 
 ---
@@ -119,6 +123,7 @@ Pass criteria:
 5. Export diagnostics on both devices immediately after convergence.
 
 Goal:
+
 - create a realistic legacy rename-conflict footprint before cutover.
 
 ### 9. Run migration command
@@ -129,6 +134,7 @@ Goal:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - room schema reports v2.
 - no fatal auth errors on upgraded clients.
 
@@ -139,10 +145,11 @@ Pass criteria:
 3. Export diagnostics on both devices.
 
 Pass criteria:
+
 - no ghost file remains on disk.
 - no immediate re-ingestion loop from stale disk path.
 
-### Phase 2 checkpoint
+### Phase 2 checkpoint: migration cutover
 
 Export diagnostics on both devices now.
 
@@ -158,10 +165,11 @@ Export diagnostics on both devices now.
 4. Capture older-client log/notice screenshot showing rejection.
 
 Pass criteria:
+
 - client is rejected with `update_required`.
 - no partial writes accepted from incompatible client.
 
-### Phase 3 checkpoint
+### Phase 3 checkpoint: divergence guard
 
 Migration drill complete. Archive all diagnostics + screenshots.
 
@@ -189,6 +197,7 @@ Run B was executed after Run A and passed for v1.0.0 release scope.
 5. Run `YAOS: Export sync diagnostics` on both devices.
 
 Pass criteria:
+
 - Device B receives host/token/vaultId correctly.
 - no split-brain room assignment.
 
@@ -200,6 +209,7 @@ Pass criteria:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - desktop notes hydrate automatically.
 - no unexpected deletions.
 
@@ -210,6 +220,7 @@ Pass criteria:
 3. Export diagnostics on both devices.
 
 Pass criteria:
+
 - converged final content, no persistent degraded/binding failure.
 
 ### 4. Fast edit lifecycle + swipe kill
@@ -218,6 +229,7 @@ Pass criteria:
 2. Export diagnostics on both devices.
 
 Pass criteria:
+
 - last typed line survives; no persistent degraded state.
 
 ### 5. Filesystem bridge controls
@@ -229,6 +241,7 @@ Pass criteria:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - coalesced ingest, echo suppression works, out-of-band edit ingests.
 
 ### 6. Attachment stress + oversize behavior
@@ -237,6 +250,7 @@ Pass criteria:
 2. Export diagnostics on both devices after queue drain.
 
 Pass criteria:
+
 - queue drains, files open on both, oversize skip is user-visible + logged.
 
 ### 7. Checkpoint truncation boundary
@@ -247,6 +261,7 @@ Pass criteria:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - convergence via checkpoint/journal reset; no corruption/dupes.
 
 ### Phase 1 checkpoint
@@ -264,6 +279,7 @@ Pass criteria:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - edit survives.
 - final state has one winning path.
 - no duplicate resurrection.
@@ -276,6 +292,7 @@ Pass criteria:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - selected markdown restores correctly.
 - selected attachment refs restore and download.
 - no legacy path corruption after restore.
@@ -297,6 +314,7 @@ Completion note:
 4. Export diagnostics on both devices.
 
 Pass criteria:
+
 - deleted file does not resurrect.
 - tombstone/index invariants hold.
 
@@ -314,6 +332,7 @@ Pass criteria:
 3. Export diagnostics on both devices.
 
 Pass criteria:
+
 - plugin surfaces clear degraded/error state.
 - diagnostics classify IDB failure reason (for example `quota_exceeded`).
 - no silent false-safe behavior.

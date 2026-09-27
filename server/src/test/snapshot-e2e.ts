@@ -5,6 +5,7 @@
  */
 
 import { YaosServer } from "../bun";
+import { readOptionalS3Config } from "../s3-config";
 import * as Y from "yjs";
 import WebSocket from "ws";
 
@@ -26,13 +27,7 @@ async function runTest() {
     port: TEST_PORT,
     databaseUrl: process.env.DATABASE_URL || "postgresql://localhost:5432/yaos",
     syncToken: TEST_TOKEN,
-    s3: process.env.S3_ENDPOINT ? {
-      endpoint: process.env.S3_ENDPOINT,
-      region: process.env.S3_REGION || "us-east-1",
-      bucket: process.env.S3_BUCKET || "yaos",
-      accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
-    } : undefined,
+    s3: readOptionalS3Config({ defaultBucket: "yaos" }),
   });
 
   try {

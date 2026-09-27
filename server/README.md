@@ -1,8 +1,10 @@
 # YAOS server
 
-Self-hosted sync server for the YAOS Obsidian plugin. Built with Bun, PostgreSQL, and S3-compatible storage.
+Self-hosted sync server for the YAOS Obsidian plugin. Built with Bun, PostgreSQL, and external S3-compatible storage.
 
 ## Quick start
+
+### Run with Bun
 
 ```bash
 cd server
@@ -13,15 +15,25 @@ bun run db:migrate
 bun run dev
 ```
 
-See [SELF_HOSTED.md](./SELF_HOSTED.md) for complete documentation.
+### Run with Docker
+
+Use the tracked Docker assets from the repository root:
+
+```bash
+cp .env.example .env
+docker build -t yaos-server .
+docker run --env-file .env -p 3000:3000 yaos-server
+```
+
+For the full stack, use `compose.yaml` from the repository root. It runs app and PostgreSQL; configure external S3-compatible storage separately if you need attachments or snapshots.
 
 ## Architecture
 
-- One vault maps to one sync room managed in-memory.
+- One vault maps to one sync room managed in memory.
 - Yjs sync runs through `y-partyserver` protocol.
 - PostgreSQL persists document checkpoints and journals.
-- Attachments are uploaded through the server and stored in S3-compatible storage.
-- Snapshots are gzipped CRDT archives stored in S3-compatible storage.
+- Attachments are uploaded through the server and stored in external S3-compatible storage.
+- Snapshots are gzipped CRDT archives stored in external S3-compatible storage.
 - Auth uses the claimed setup token by default, with `SYNC_TOKEN` as an optional hard override.
 
 ## Development
@@ -72,15 +84,17 @@ If you set `SYNC_TOKEN`, that environment value becomes the required token inste
 - Snapshot creation is daily-idempotent through the `/snapshots/maybe` route.
 - Snapshot archives are stored compressed to keep storage usage modest.
 
-## Legacy Cloudflare Workers path
+## Deployment notes
 
-The repository retains Cloudflare Workers configuration (`wrangler.toml`, etc.) for historical reference and comparison. The active self-hosted implementation replaces the Cloudflare-specific architecture with:
+Current server path is self-hosted first:
 
-- **Runtime**: Bun (instead of Cloudflare Workers)
-- **Primary Storage**: PostgreSQL (instead of Durable Objects)
-- **Object Storage**: Any S3-compatible service (instead of Cloudflare R2)
-- **WebSocket**: Native Bun WebSocket support (instead of partyserver on Workers)
+- **Runtime**: Bun
+- **Primary storage**: PostgreSQL
+- **Object storage**: External S3-compatible service for attachments and snapshots
+- **WebSocket**: Native Bun WebSocket support via the server runtime
+
+Background architecture notes live in the engineering docs.
 
 ## License
 
-Same as the main YAOS project.
+Same as main YAOS project.

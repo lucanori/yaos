@@ -22,7 +22,7 @@ Most ways to sync Obsidian pick a trade-off. YAOS picks none.
 | **Relay / Screengarden** | No | Yes | No | Yes | Freemium |
 | **YAOS** | **None** | **Yes** | **Yes** | **No*** | **$0** |
 
-*Self-hosted servers require minimal terminal setup. One-click hosted options coming soon.
+*Self-hosted servers use Bun or Docker plus PostgreSQL. Attachments and snapshots require configured external S3-compatible storage.
 
 YAOS uses [Yjs CRDTs](https://yjs.dev) to keep one live vault state moving across devices instead of asking them to take polite turns uploading files and hoping nothing collides.
 
@@ -30,26 +30,36 @@ If you want the official, fully managed experience, pay for Obsidian Sync and su
 
 ## Get started
 
-YAOS has two parts: an Obsidian plugin and a self-hosted sync server. You run the server yourself using [Bun](https://bun.sh), PostgreSQL, and any S3-compatible storage.
+YAOS has two parts: an Obsidian plugin and a self-hosted sync server. Run the server yourself with Bun directly or package it in Docker. The required stack is app + PostgreSQL; attachments and snapshots use external S3-compatible storage.
 
-### Quick start (self-hosted)
-
-**1. Install the plugin**
+### 1. Install the plugin
 
 Add through [BRAT](https://github.com/TfTHacker/obsidian42-brat): open BRAT settings → **Add Beta plugin** → paste `kavinsood/yaos`.
 
-**2. Deploy your server**
+### 2. Run your server
 
-See [server/SELF_HOSTED.md](server/SELF_HOSTED.md) for complete setup instructions:
+#### Bun (recommended for local dev)
 
 ```bash
 cd server
 bun install
+cp .env.example .env
 bun run db:migrate
 bun run dev
 ```
 
-**3. Connect your vault**
+#### Docker install
+
+From the repository root, use the tracked Docker assets:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+For a single-image build, use `Dockerfile` from the repository root.
+
+### 3. Connect your vault
 
 Enter your server URL and sync token in **Settings → YAOS**.
 
@@ -57,7 +67,7 @@ That's it. Your vault is syncing.
 
 ## Attachments and snapshots
 
-Text sync works out of the box. To sync images, PDFs, and other attachments, configure S3-compatible object storage.
+Text sync works out of the box. To sync images, PDFs, and other attachments, configure external S3-compatible object storage.
 
 S3-compatible storage also enables daily automatic snapshots and on-demand point-in-time backups. You can browse snapshots, diff against current state, and selectively restore individual files. Without object storage, text sync still works perfectly — you just won't have attachment sync or snapshots.
 
@@ -65,7 +75,7 @@ S3-compatible storage also enables daily automatic snapshots and on-demand point
 
 Because you own your infrastructure, you control when updates apply.
 
-Updates are currently manual: pull the latest code, run migrations if needed, and restart:
+### Bun
 
 ```bash
 cd server
@@ -75,7 +85,9 @@ bun run db:migrate
 bun run dev
 ```
 
-Read release notes before updating. Some releases require manual migration steps.
+### Docker rebuild
+
+Rebuild the image, then restart the container with the same `.env` file.
 
 ## Works with scripts and AI agents
 
@@ -104,9 +116,9 @@ This repository keeps deep architecture notes under [`engineering/`](./engineeri
 - **[Monolithic vault CRDT](./engineering/monolith.md)** — Why one vault-level `Y.Doc`, what we gain (ACID cross-file transactions), and what we consciously trade off.
 - **[Filesystem bridge](./engineering/filesystem-bridge.md)** — How noisy Obsidian file events are converted into safe CRDT updates with dirty-set draining and content-acknowledged suppression.
 - **[Checkpoint + journal persistence](./engineering/checkpoint-journal.md)** — The storage-engine rewrite that removed full-state rewrites and introduced state-vector-anchored delta journaling.
-- **[Attachment sync](./engineering/attachment-sync.md)** — Native Worker proxy uploads, capability negotiation, and bounded fan-out under Cloudflare connection limits.
+- **[Attachment sync](./engineering/attachment-sync.md)** — Content-addressed blob uploads and bounded fan-out for attachments.
 - **[Zero-config auth](./engineering/zero-config-auth.md)** — Browser claim UX, `obsidian://yaos` deep-link pairing, and env-token override behavior.
-- **[Zero-ops update pipeline](./engineering/zero-ops-update-pipeline.md)** — Why detached deploy repos need bootstrap injection, reusable workflows, and migration safety gates.
+- **[Server update pipeline](./engineering/zero-ops-update-pipeline.md)** — How self-hosted installs update safely without hidden platform coupling.
 - **[Warts and limits](./engineering/warts-and-limits.md)** — Canonical limits, safety invariants, and the pragmatic compromises currently in production.
 
 ## Limits
@@ -123,7 +135,7 @@ After enabling, go to **Settings → YAOS**.
 
 | Setting | Description |
 |---------|-------------|
-| **Server URL** | Your Worker URL (e.g. `https://sync.yourdomain.com`) |
+| **Server URL** | Your self-hosted server URL (e.g. `http://127.0.0.1:3000` or `https://sync.example.com`) |
 | **Sync token** | Filled automatically by the setup link after claiming |
 | **Device name** | Shown to other devices in live cursors and presence |
 | **Exclude paths** | Comma-separated prefixes to skip (e.g. `templates/, .trash/`) |

@@ -911,9 +911,9 @@ export class YaosServer {
   private async handleWebSocketOpen(ws: ServerWebSocket<WebSocketData>): Promise<void> {
     const { roomId, authorized, socketId, rejection } = ws.data;
 
-    if (!authorized && rejection) {
-      // Send auth error frames before closing, matching Cloudflare Workers behavior
-      const payload = JSON.stringify({ type: "error", code: rejection.code, ...rejection.details });
+	if (!authorized && rejection) {
+		// Send auth error frames before closing.
+		const payload = JSON.stringify({ type: "error", code: rejection.code, ...rejection.details });
 
       // Send plain JSON frame first (for generic websocket clients/tests)
       ws.send(payload);

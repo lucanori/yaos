@@ -97,7 +97,7 @@ class BlobHttpClient {
 	) {}
 
 	/**
-	 * Build the HTTP URL for a blob endpoint on the Worker.
+	 * Build the HTTP URL for a blob endpoint on the server.
 	 */
 	private url(endpoint: string): string {
 		return appendTraceParams(

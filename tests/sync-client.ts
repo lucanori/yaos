@@ -8,7 +8,7 @@ import * as Y from "yjs";
 import YSyncProvider from "y-partyserver/provider";
 import WebSocket from "ws";
 
-const HOST = process.env.YAOS_TEST_HOST || "http://127.0.0.1:8787";
+const HOST = process.env.YAOS_TEST_HOST || "http://127.0.0.1:3000";
 const TOKEN = process.env.SYNC_TOKEN || "dev-sync-token";
 const VAULT_ID = process.env.YAOS_TEST_VAULT_ID || "yaos-smoke-test";
 const SCHEMA_VERSION = process.env.YAOS_TEST_SCHEMA_VERSION || "1";

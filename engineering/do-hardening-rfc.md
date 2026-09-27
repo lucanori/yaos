@@ -236,7 +236,7 @@ This is not:
 
 It is a tiny sidecar for tiny decisions.
 
-#### Expected upside
+#### Expected upside for load memoization
 
 Best case:
 
@@ -319,7 +319,7 @@ This is mostly a cold-start efficiency and correctness-boundary improvement, not
 
 Current state:
 
-- the Worker performs a check-then-create flow against R2
+- the server performs a check-then-create flow against object storage
 - two concurrent callers can both create the same daily snapshot
 
 Approved change:
@@ -336,7 +336,7 @@ Goal:
 The snapshot race is real, but its blast radius is limited:
 
 - duplicate daily snapshots
-- unnecessary R2 writes
+- unnecessary object-storage writes
 - noisier history
 
 It does not threaten core text sync correctness the way the observability bug does. So it is included in this RFC, but after the room-availability and admission-path fixes.
@@ -370,18 +370,18 @@ These tests do not need to be extensive, but they should ensure this hardening p
 
 The following items remain valid future work, but are intentionally not included in this batch:
 
-- Worker RAM auth-state cache with very short TTL
+- server RAM auth-state cache with very short TTL
 - RPC cleanup for config DO control-plane calls
 - post-connect websocket auth handshake or short-lived session credentials
 - more advanced trace retention using alarms
 
-### Why the Worker RAM auth cache is deferred
+### Why the server RAM auth cache is deferred
 
 This optimization was discussed in detail and remains intentionally optional.
 
 It has some real value:
 
-- a warm Worker isolate can avoid repeated config-DO reads during short bursts
+- a warm server process can avoid repeated config-store reads during short bursts
 - a temporarily far-from-origin user may shave one extra round trip on follow-up requests
 
 But its upside is bounded:
@@ -394,9 +394,9 @@ So the cache is treated as a zero-ops micro-optimization, not a core hardening r
 
 If implemented later, it should cache the resolved auth/config state, not "token validity" as an independent security boundary.
 
-### Why Workers KV is excluded
+### Why extra shared KV is excluded
 
-Workers KV is intentionally excluded from this RFC for auth/config reads.
+Shared KV is intentionally excluded from this RFC for auth/config reads.
 
 Reasons:
 

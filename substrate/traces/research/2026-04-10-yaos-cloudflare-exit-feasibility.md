@@ -282,7 +282,7 @@ Architettura consigliata:
 - una cartella volume persistente per DB locali;
 - optional healthcheck, metrics e backup.
 
-Questa è la migrazione più naturale perché replica bene il modello BYOC single-user/small-team di YAOS senza introdurre subito Redis, cluster o architetture distribuite.
+Questa è la migrazione più naturale perché replica bene il modello BYOC single-user/small-team di YAOS senza introdurre subito cluster o architetture distribuite.
 
 ## Opzioni alternative
 

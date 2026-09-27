@@ -34,12 +34,12 @@ We stopped reacting to every filesystem tick.
 - A single asynchronous drainer processes these batches at the pace of actual disk I/O.
 - Crucially, the batch is cleared before processing begins. Any new filesystem events that arrive during the I/O read will safely re-dirty the path for the next pass. Event storms are now bounded by path, paced by backpressure.
 
-2. Outbound (CRDT -> Disk): Per-Path Serialization
+1. Outbound (CRDT -> Disk): Per-Path Serialization
 
 - Outbound writes from the CRDT to the disk now pass through a strict promise chain lock.
 - This ensures that the same file cannot be written concurrently by overlapping paths, making it impossible for overlapping network syncs to trigger concurrent flushes to the same file.
 
-3. State-Acknowledged Suppression
+1. State-Acknowledged Suppression
 
 We entirely replaced time-based suppression with observed state acknowledgment. This is how we solved the out-of-band edit problem.
 
@@ -52,6 +52,7 @@ If a user edits a file out-of-band using a different markdown editor, the hash c
 ## Current Invariants
 
 This architecture guarantees the following strict invariants for the filesystem bridge:
+
 - One path, one active write chain.
 - Disk event coalescing is path-based and idempotent.
 - Self-event suppression must be validated by observed content state.

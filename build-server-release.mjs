@@ -65,7 +65,6 @@ const updateManifest = {
 const serverZipManifest = {
 	serverVersion,
 	pluginVersion: pluginManifest.version,
-	protectedFiles: ["wrangler.toml"],
 	updateOwnedPaths: [
 		".gitlab-ci.yml",
 		"package.json",
@@ -86,7 +85,6 @@ for (const relativePath of [
 	".gitlab-ci.yml",
 	"scripts",
 	"tsconfig.json",
-	"wrangler.toml",
 	"src",
 ]) {
 	cpSync(resolve(rootDir, "server", relativePath), join(serverTempDir, relativePath), {

@@ -1,4 +1,4 @@
-# Piano di migrazione completo verso Bun + PostgreSQL + Redis opzionale + S3
+# Piano di migrazione completo verso Bun + PostgreSQL + S3
 
 Data: 2026-04-10
 
@@ -17,7 +17,6 @@ verso:
 - server self-hosted in container Docker
 - runtime Bun
 - PostgreSQL come store persistente primario
-- Redis opzionale per cache/coordination
 - bucket S3-compatible generico per blob e snapshot
 - reverse proxy standard davanti al servizio
 
@@ -102,18 +101,18 @@ Riferimento:
   - blob attachment
   - snapshot payload
 
-## Redis
+## Coordinazione futura
 
-Redis **non è richiesto nella prima iterazione** per correttezza.
+La prima iterazione non include servizi aggiuntivi di cache o coordinazione.
 
-Usi ammessi solo se servono davvero:
+Eventuali estensioni future restano fuori dallo stack base e vanno introdotte solo se servono davvero:
 
 - pub/sub cross-instance in futuro
 - cache room metadata/capabilities
 - rate limiting
 - distributed coordination in un domani multi-instance
 
-Per la prima distribuzione target, Redis va trattato come **opzionale**, non core dependency.
+Per la prima distribuzione target, queste estensioni vanno trattate come **opzionali**, non core dependency.
 
 ## Docker deployment
 
@@ -121,8 +120,7 @@ Stack minimo consigliato:
 
 - `yaos-server` (Bun)
 - `postgres`
-- `redis` opzionale
-- nessun MinIO obbligatorio in produzione, ma utile per test locali
+- nessun object store S3-compatible obbligatorio in produzione, ma utile configurarne uno esterno per test locali
 - reverse proxy esterno o nello stesso compose secondo preferenza
 
 ## Contratti da mantenere invariati
@@ -168,7 +166,7 @@ Tabella config globale:
 
 Tabella trace dedicata oppure namespace nello stesso KV, in base alla semplicità dell’adapter.
 
-## Decisione 2: non introdurre Redis nella fase 1 server core
+## Decisione 2: non introdurre servizi di coordinazione nella fase 1 server core
 
 Motivo:
 
@@ -176,7 +174,7 @@ Motivo:
 - aumenta il perimetro di failure
 - YAOS è BYOC/small-scale per sua natura
 
-Redis va introdotto solo dopo che il server Bun + Postgres è stabile.
+Servizi di coordinazione aggiuntivi vanno introdotti solo dopo che il server Bun + Postgres è stabile.
 
 ## Decisione 3: Bun come runtime, non come motivo per riscrivere il plugin build subito
 
@@ -215,7 +213,7 @@ Per interfacce condivise del backend:
 - `postgres-storage.ts`
 - `postgres-config.ts`
 - `s3-blob-store.ts`
-- `redis-cache.ts` opzionale
+- `coordination-cache.ts` opzionale
 
 ### `server/src/runtime/`
 
@@ -337,7 +335,7 @@ Sostituire R2 con backend S3-compatible mantenendo le stesse chiavi logiche.
 2. portare blob exists/upload/download;
 3. portare snapshot create/list/get;
 4. validare metadata content-type e pagination;
-5. test contro MinIO locale + almeno un provider reale S3-compatible.
+5. test contro un provider S3-compatible locale o esterno + almeno un provider reale S3-compatible.
 
 ### Exit criteria
 
@@ -511,18 +509,18 @@ Mitigazione:
 - separare Bun migration, Postgres migration e runtime rewrite in fasi
 - non migrare tutto in un singolo PR
 
-## Rischio 5 — Redis introdotto troppo presto
+## Rischio 5 — coordinazione introdotta troppo presto
 
 Mitigazione:
 
-- tenerlo fuori dal critical path della fase 1-4
+- tenerla fuori dal critical path della fase 1-4
 
 ## Decisioni di prodotto da prendere esplicitamente
 
 1. il nuovo server deve supportare ancora il claim flow browser-based?
 2. il plugin deve rimuovere del tutto la copy Cloudflare o solo deprecarla?
 3. l’update flow plugin resta come metadata generico o viene ridisegnato?
-4. Redis è opzionale in produzione o supportato ufficialmente come parte dello stack?
+4. la coordinazione aggiuntiva è opzionale in produzione o supportata ufficialmente come parte dello stack?
 5. il nuovo backend deve supportare singola istanza soltanto nella v1 self-hosted o già multi-instance?
 
 ## Ordine consigliato dei PR / milestone
@@ -625,7 +623,7 @@ La migrazione corretta non è “portare il Worker dentro Docker”, ma:
 - re-hostarlo su Bun;
 - preservare i contratti verso il plugin;
 - appoggiarlo su Postgres e S3;
-- usare Redis solo dove porta valore misurabile.
+- introdurre coordinazione aggiuntiva solo dove porta valore misurabile.
 
 La priorità assoluta è mantenere intatte le garanzie di correttezza di YAOS, non inseguire ottimizzazioni premature.
 

@@ -1,10 +1,11 @@
 # YAOS Self-Hosted Server Tests
 
-This directory contains tests for the YAOS self-hosted server (Bun/Postgres/S3 stack).
+This directory contains tests for the YAOS self-hosted server (Bun/Postgres stack with optional external S3-compatible storage).
 
 ## Test Files
 
 ### `validate.ts`
+
 Static validation tests that don't require a running database.
 
 ```bash
@@ -12,6 +13,7 @@ bun run validate
 ```
 
 Tests include:
+
 - Server instantiation
 - Token hashing
 - Config storage type definitions
@@ -23,6 +25,7 @@ Tests include:
 - WebSocket protocol structures
 
 ### `integration.ts`
+
 Full integration tests requiring PostgreSQL and optionally S3.
 
 ```bash
@@ -47,15 +50,15 @@ docker run -d \
   -e POSTGRES_PASSWORD=yaos \
   -e POSTGRES_DB=yaos_test \
   -p 5432:5432 \
-  postgres:15
+  postgres:18
 
 # Set environment variable
 export DATABASE_URL="postgresql://yaos:yaos@localhost:5432/yaos_test"
 ```
 
-### S3-Compatible Storage (Optional)
+### External S3-Compatible Storage (Optional)
 
-For blob and snapshot tests, configure S3:
+For blob and snapshot tests, configure an external S3-compatible provider:
 
 ```bash
 export S3_ENDPOINT=https://s3.amazonaws.com
@@ -80,28 +83,33 @@ If not set, tests will use the claim flow.
 ## Test Categories
 
 ### 1. Capabilities Endpoint
+
 - Unclaimed state response
 - Claimed state response
 - Server version and features
 
 ### 2. Authentication
+
 - Claim flow (if no env token)
 - Env token authentication (if configured)
 - Unauthorized request handling
 - Double claim rejection
 
 ### 3. WebSocket Sync
+
 - Connection establishment
 - Authorization enforcement
 - Document sync between clients
 - Multiple concurrent clients
 
 ### 4. HTTP Routes
+
 - Setup page HTML
 - Debug endpoints
 - CORS headers
 
 ### 5. Snapshots & Blobs (if S3 configured)
+
 - Snapshot creation
 - Snapshot listing
 - Blob upload/download
@@ -124,7 +132,7 @@ docker run -d --name yaos-postgres \
   -e POSTGRES_PASSWORD=yaos \
   -e POSTGRES_DB=yaos_test \
   -p 5432:5432 \
-  postgres:15
+  postgres:18
 
 # Run tests
 export DATABASE_URL="postgresql://yaos:yaos@localhost:5432/yaos_test"
@@ -172,7 +180,7 @@ bun run test:integration
 
 ### Validation Tests
 
-```
+```text
 === YAOS Self-Hosted Server Validation ===
 
 ✓ Server instantiation
@@ -189,7 +197,7 @@ Failed: 0/12
 
 ### Integration Tests
 
-```
+```text
 ═══════════════════════════════════════════════════════════
 YAOS Self-Hosted Server - Integration Tests
 ═══════════════════════════════════════════════════════════

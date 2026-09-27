@@ -2,7 +2,7 @@ import * as Y from "yjs";
 import YSyncProvider from "y-partyserver/provider";
 import WebSocket from "ws";
 
-const HOST = process.env.YAOS_TEST_HOST || "http://127.0.0.1:8787";
+const HOST = process.env.YAOS_TEST_HOST || "http://127.0.0.1:3000";
 const TOKEN = process.env.SYNC_TOKEN || "";
 const BASE_VAULT_ID = process.env.YAOS_TEST_VAULT_ID || "yaos-schema-guard";
 const ROOM_ID = `${BASE_VAULT_ID}-schema-guard`;

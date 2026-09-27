@@ -1,34 +1,32 @@
 #!/usr/bin/env bun
 /**
- * S3 Stream Handling Test
+ * Object storage stream handling test
  * Verifies that snapshot listing works with AWS SDK v3 streams
  */
 
 import { S3Storage } from "../storage/s3";
 import { listSnapshots, createSnapshot } from "../snapshot";
+import { readOptionalS3Config } from "../s3-config";
 import * as Y from "yjs";
 
-const S3_ENDPOINT = process.env.S3_ENDPOINT || "http://localhost:9000";
-const S3_BUCKET = process.env.S3_BUCKET || "yaos";
-const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY_ID || "minioadmin";
-const S3_SECRET_KEY = process.env.S3_SECRET_ACCESS_KEY || "minioadmin";
+const S3_CONFIG = readOptionalS3Config({ defaultBucket: "yaos-test" });
 const TEST_VAULT_ID = process.env.TEST_VAULT_ID || `stream-test-${Date.now().toString(36)}`;
 
-console.log("=== S3 Stream Handling Test ===\n");
+console.log("=== Object Storage Stream Handling Test ===\n");
 console.log("Configuration:");
-console.log(`  Endpoint: ${S3_ENDPOINT}`);
-console.log(`  Bucket: ${S3_BUCKET}`);
+console.log(`  S3 configured: ${S3_CONFIG ? "yes" : "no"}`);
 console.log(`  Vault ID: ${TEST_VAULT_ID}`);
 console.log();
 
 async function runTest() {
-  // Create S3 storage
+  if (!S3_CONFIG) {
+    console.log("S3 config missing or incomplete. Set S3_* vars to run this test.");
+    process.exit(0);
+  }
+
+  // Create storage client
   const s3 = new S3Storage({
-    endpoint: S3_ENDPOINT,
-    region: process.env.S3_REGION || "us-east-1",
-    bucket: S3_BUCKET,
-    accessKeyId: S3_ACCESS_KEY,
-    secretAccessKey: S3_SECRET_KEY,
+    ...S3_CONFIG,
     forcePathStyle: true,
   });
 

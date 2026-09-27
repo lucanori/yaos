@@ -1,6 +1,8 @@
 import { ChunkedDocStore } from "../server/src/chunkedDocStore";
 import * as Y from "yjs";
 
+type ChunkedDocStorageLike = ConstructorParameters<typeof ChunkedDocStore>[0];
+
 class FakeStorage {
 	readonly data = new Map<string, unknown>();
 	maxGetBatch = 0;
@@ -131,7 +133,7 @@ async function expectThrows(
 console.log("\n--- Test 1: load returns null when no chunked state exists ---");
 {
 	const storage = new FakeStorage();
-	const store = new ChunkedDocStore(storage as unknown as DurableObjectStorage);
+	const store = new ChunkedDocStore(storage as unknown as ChunkedDocStorageLike);
 	const loaded = await store.loadState();
 
 	assert(loaded.checkpoint === null, "empty store has no checkpoint");
@@ -144,7 +146,7 @@ console.log("\n--- Test 2: checkpoint save/load works beyond 128 chunk keys ---"
 {
 	const storage = new FakeStorage();
 	const store = new ChunkedDocStore(
-		storage as unknown as DurableObjectStorage,
+		storage as unknown as ChunkedDocStorageLike,
 		{
 			chunkSizeBytes: 64, // tiny chunk size to force >128 chunks in test
 			maxKeysPerOperation: 128,
@@ -168,7 +170,7 @@ console.log("\n--- Test 3: append journal update replays with checkpoint ---");
 {
 	const storage = new FakeStorage();
 	const store = new ChunkedDocStore(
-		storage as unknown as DurableObjectStorage,
+		storage as unknown as ChunkedDocStorageLike,
 		{ chunkSizeBytes: 64 },
 	);
 	const base = new Y.Doc();
@@ -198,7 +200,7 @@ console.log("\n--- Test 4: rewriteCheckpoint clears journal and stores state vec
 {
 	const storage = new FakeStorage();
 	const store = new ChunkedDocStore(
-		storage as unknown as DurableObjectStorage,
+		storage as unknown as ChunkedDocStorageLike,
 		{ chunkSizeBytes: 64 },
 	);
 
@@ -235,7 +237,7 @@ console.log("\n--- Test 5: fail closed when a checkpoint chunk is missing ---");
 {
 	const storage = new FakeStorage();
 	const store = new ChunkedDocStore(
-		storage as unknown as DurableObjectStorage,
+		storage as unknown as ChunkedDocStorageLike,
 		{ chunkSizeBytes: 64 },
 	);
 
@@ -257,7 +259,7 @@ console.log("\n--- Test 6: fail closed when journal chunk bytes are tampered ---
 {
 	const storage = new FakeStorage();
 	const store = new ChunkedDocStore(
-		storage as unknown as DurableObjectStorage,
+		storage as unknown as ChunkedDocStorageLike,
 		{ chunkSizeBytes: 64 },
 	);
 

@@ -26,6 +26,7 @@ dist
 server/node_modules
 server/dist
 server/.env
+.env
 .wrangler
 server/.partykit
 server/.wrangler

@@ -6,10 +6,19 @@ import {
 	type TraceEntry,
 } from "../server/src/traceStore";
 
+type TraceListOptions = {
+	prefix?: string;
+	reverse?: boolean;
+	limit?: number;
+	end?: string;
+	start?: string;
+	startAfter?: string;
+};
+
 class FakeStorage {
 	readonly data = new Map<string, unknown>();
 
-	async list<T = unknown>(options: DurableObjectListOptions = {}): Promise<Map<string, T>> {
+	async list<T = unknown>(options: TraceListOptions = {}): Promise<Map<string, T>> {
 		let keys = [...this.data.keys()].sort((a, b) => a.localeCompare(b));
 		if (options.prefix) {
 			keys = keys.filter((key) => key.startsWith(options.prefix!));

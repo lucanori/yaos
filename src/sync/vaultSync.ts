@@ -87,7 +87,7 @@ interface IndexedDbErrorDetails {
 }
 
 /**
- * Manages the vault-wide Y.Doc, the Worker sync provider, IndexedDB
+ * Manages the vault-wide Y.Doc, the sync provider, IndexedDB
  * persistence, and the shared Yjs maps.
  *
  * Schema:

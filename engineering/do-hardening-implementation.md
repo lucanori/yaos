@@ -87,7 +87,7 @@ Instead, the room maintains a tiny metadata sidecar:
 - `schemaVersion`
 - `updatedAt`
 
-The Worker first reads this metadata for schema admission. Only if metadata is
+The server first reads this metadata for schema admission. Only if metadata is
 missing or invalid does it fall back to the older full-document probe.
 
 This is intentionally a **read-path optimization**, not a second source of
@@ -103,9 +103,9 @@ duplicate checkpoint/journal replay work during reconnect bursts.
 
 ## 7. Snapshot `maybe` is serialized inside the room
 
-The old snapshot `maybe` path used a Worker-side check-then-act flow.
+The old snapshot `maybe` path used a server-side check-then-act flow.
 
-The new path routes the "maybe create snapshot" decision through the room DO,
+The new path routes the "maybe create snapshot" decision through the room,
 where it is serialized. This prevents duplicate daily snapshot creation under
 concurrency.
 

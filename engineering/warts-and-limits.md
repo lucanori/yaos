@@ -32,26 +32,24 @@ Very large vaults are still constrained by:
 
 - CPU cost for `Y.encodeStateAsUpdate()` and merge/apply work.
 - Server memory pressure (rooms stay in memory; no hibernation equivalent).
-- Client-side parse/apply latency (especially mobile), even if transport limits are higher.
+- Client-side parse/apply latency, especially on mobile, even if transport limits are higher.
 
 In practice, compute and memory behavior usually become the first bottlenecks before raw storage capacity for CRDTs.
 
 ## Safety invariants
 
-- Fail closed: any manifest/chunk/hash mismatch aborts load.
+- Fail closed: any manifest or chunk hash mismatch aborts load.
 - Ordered writes: persistence is serialized so journal appends cannot reorder.
-- State-vector anchoring: delta baselines are persisted with checkpoints and restored after hibernation wake.
+- State-vector anchoring: delta baselines are persisted with checkpoints and restored after wake.
 - Batched storage ops: get/put/delete are capped at 128 keys per operation.
 
 ## Operational warts and intentional tradeoffs
 
 ### Observability is bounded and fail-open by design
 
-YAOS originally kept room traces in one growing storage value. Real production
-logs showed that this could trigger `SQLITE_TOOBIG` and take the room down.
+YAOS originally kept room traces in one growing storage value. Real production logs showed that this could trigger `SQLITE_TOOBIG` and take the room down.
 
-The current design stores traces as bounded per-entry records and treats trace
-persistence as fail-open.
+The current design stores traces as bounded per-entry records and treats trace persistence as fail-open.
 
 Implications:
 
@@ -62,23 +60,22 @@ This is the correct trade for telemetry in a sync engine.
 
 ### Schema admission uses a metadata sidecar
 
-Websocket schema admission now reads a small room metadata sidecar rather than
-reconstructing the full room document in the common case.
+WebSocket schema admission now reads a small room metadata sidecar rather than reconstructing the full room document in the common case.
 
 This sidecar is intentionally narrow:
 
 - it exists for tiny admission decisions
 - it is not a second source of truth for room contents
 
-Fallback to full-document probing remains for legacy/missing metadata cases.
+Fallback to full-document probing remains for legacy or missing metadata cases.
 
 ### CRDT tombstones are retained
 
-In YAOS, markdown tombstones (records of deleted files) are intentionally retained in the CRDT graph.
+In YAOS, markdown tombstones, records of deleted files, are intentionally retained in the CRDT graph.
 
 Reason: without tombstones, stale offline clients can reintroduce deleted files during reconnect, causing resurrection bugs.
 
-Tradeoff: tombstones increase long-term graph size and add lookup overhead, but they preserve deletion correctness under reconnect/offline churn. This is a correctness-first choice.
+Tradeoff: tombstones increase long-term graph size and add lookup overhead, but they preserve deletion correctness under reconnect and offline churn. This is a correctness-first choice.
 
 ### Local plugin persistence is serialized on purpose
 
@@ -86,32 +83,30 @@ The plugin persists multiple state domains into Obsidian `data.json` (settings, 
 
 Obsidian persistence requires a read/merge/write cycle. If independent async saves race, they can clobber each other.
 
-YAOS routes these writes through a single serialized persistence chain to prevent cross-feature state stomps. This is less "clean" than isolated save paths, but materially safer.
+YAOS routes these writes through a single serialized persistence chain to prevent cross-feature state stomps. This is less clean than isolated save paths, but materially safer.
 
 ### IndexedDB readiness check uses private internals
 
-Local-first behavior depends on `y-indexeddb` startup succeeding. IndexedDB implementations are known to be flaky in some mobile/webview conditions.
+Local-first behavior depends on `y-indexeddb` startup succeeding. IndexedDB implementations are known to be flaky in some mobile and WebView conditions.
 
 YAOS currently reads a private `y-indexeddb` internal (`_db`) to detect startup failure reliably and fail safely instead of continuing in a potentially corrupt state.
 
-This is a contained hack, explicitly documented, and should be replaced if upstream offers a stable public readiness/failure API.
+This is a contained hack, explicitly documented, and should be replaced if upstream offers a stable public readiness or failure API.
 
 ## Pragmatic compromises
 
 These are deliberate compromises to preserve correctness and operability in real environments:
 
-- WebSocket auth currently accepts query param token flow because browser/WebView socket APIs make header-based auth inconsistent in practice. We keep this bounded via explicit server checks and fail-closed behavior, but treat it as transitional architecture.
-- Filesystem-facing sync paths are intentionally mixed:
-  markdown ingest uses a dirty-set drain loop for backpressure-aware coalescing,
-  while some blob paths keep quiet-window checks because partial attachment reads are costlier and noisier than text edits.
-- Some modules remain large where state-machine locality matters (for example, startup/reconnect orchestration). We prioritize correctness and traceability over arbitrary file-size purity.
+- WebSocket auth currently accepts query param token flow because browser and WebView socket APIs make header-based auth inconsistent in practice. We keep this bounded via explicit server checks and fail-closed behavior, but treat it as transitional architecture.
+- Filesystem-facing sync paths are intentionally mixed: markdown ingest uses a dirty-set drain loop for backpressure-aware coalescing, while some blob paths keep quiet-window checks because partial attachment reads are costlier and noisier than text edits.
+- Some modules remain large where state-machine locality matters, for example startup and reconnect orchestration. We prioritize correctness and traceability over arbitrary file-size purity.
 
 The standard is not "perfect abstraction." The standard is explicit correctness boundaries plus controlled, testable compromises.
 
 ## Known non-goals and future work
 
 - No fully automatic HTTP bootstrap path for giant initial sync payloads yet.
-- No cryptographic prev-hash chain between journal segments yet (current model uses per-segment hash plus strict sequence validation).
-- No per-file sharded CRDT model yet (current design intentionally preserves monolithic cross-file transactional semantics).
+- No cryptographic prev-hash chain between journal segments yet; current model uses per-segment hash plus strict sequence validation.
+- No per-file sharded CRDT model yet; current design intentionally preserves monolithic cross-file transactional semantics.
 - WebSocket auth still supports query token transport; target state is explicit post-connect auth handshake plus short-lived session credentials.
-- Worker RAM caching for config/auth reads remains optional micro-optimization, not core architecture.
+- Server RAM caching for config and auth reads remains optional micro-optimization, not core architecture.

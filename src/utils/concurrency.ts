@@ -1,7 +1,7 @@
 export async function mapWithConcurrency<T, R>(
 	items: readonly T[],
 	limit: number,
-	worker: (item: T, index: number) => Promise<R>,
+	task: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
 	if (items.length === 0) return [];
 
@@ -9,17 +9,17 @@ export async function mapWithConcurrency<T, R>(
 	const results = new Array<R>(items.length);
 	let nextIndex = 0;
 
-	async function runWorker(): Promise<void> {
+	async function runTask(): Promise<void> {
 		while (true) {
 			const index = nextIndex;
 			nextIndex++;
 			if (index >= items.length) return;
-			results[index] = await worker(items[index]!, index);
+			results[index] = await task(items[index]!, index);
 		}
 	}
 
 	await Promise.all(
-		Array.from({ length: normalizedLimit }, () => runWorker()),
+		Array.from({ length: normalizedLimit }, () => runTask()),
 	);
 
 	return results;

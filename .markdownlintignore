@@ -1,0 +1,12 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+coverage/
+substrate/
+.venv/
+**/.venv/
+*.DS_Store
+vendor/
+**/vendor/
+tmp/

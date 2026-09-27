@@ -1,10 +1,11 @@
-# Snapshot Semantics and The Recovery Model
+# Snapshot semantics and the recovery model
 
 Sync is nice. Recovery is the real reason you self-host your data.
 
-Obsidian's local File Recovery plugin is excellent for small "oops" moments (like accidentally deleting a paragraph). YAOS does not try to replace it. YAOS snapshots are designed for catastrophic recovery: *"I accidentally wiped my folder structure and need to intelligently restore the vault to yesterday's state."*
+Obsidian's local File Recovery plugin is excellent for small "oops" moments, like accidentally deleting a paragraph. YAOS does not try to replace it. YAOS snapshots are designed for catastrophic recovery: *"I accidentally wiped my folder structure and need to intelligently restore the vault to yesterday's state."*
 
-Snapshots are the operational safety-net for the CRDT graph, not a second attachment transport. YAOS serializes the full `Y.Doc` state, gzips the payload, and writes two objects to R2:
+Snapshots are the operational safety net for the CRDT graph, not a second attachment transport. YAOS serializes the full `Y.Doc` state, gzips the payload, and writes two objects to S3-compatible storage:
+
 - `crdt.bin.gz` (the compressed CRDT state)
 - `index.json` (snapshot metadata and blob references)
 
@@ -12,15 +13,16 @@ Snapshots are the operational safety-net for the CRDT graph, not a second attach
 
 *Snapshot creation does not duplicate blob bytes.*
 
-If snapshots copied full binary payloads each time, a daily snapshot would explode storage costs for vaults with large static media. Instead, the index.json acts as a point-in-time manifest. It records the content hashes currently referenced by the CRDT (pathToBlob). Because R2 attachments are content-addressed, this provides inherent deduplication.
+If snapshots copied full binary payloads each time, a daily snapshot would explode storage costs for vaults with large static media. Instead, `index.json` acts as a point-in-time manifest. It records the content hashes currently referenced by the CRDT (`pathToBlob`). Because attachments are content-addressed, this provides inherent deduplication.
 
-At restore time, the CRDT state is authoritative. The plugin applies the restored graph, reconstructing the exact folder structure and text, and then reconciles attachment files by pulling the missing hash pointers from R2.
+At restore time, the CRDT state is authoritative. The plugin applies the restored graph, reconstructing the exact folder structure and text, and then reconciles attachment files by pulling the missing hash pointers from object storage.
 
-## Safety Invariants
+## Safety invariants
 
 A few invariants keep this model correct under failure:
-- Snapshot IDs are generated using cryptographic randomness, not predictable Math.random() calls.
-- Snapshot operations share the exact same storage substrate as blob sync. If R2 is unbound, snapshots are disabled entirely (`snapshots: false`), preventing ambiguous recovery guarantees.
+
+- Snapshot IDs are generated using cryptographic randomness, not predictable `Math.random()` calls.
+- Snapshot operations share the exact same storage substrate as blob sync. If object storage is unavailable, snapshots are disabled entirely (`snapshots: false`), preventing ambiguous recovery guarantees.
 - Missing blob objects during restore are surfaced as localized data gaps, not silent structural failures.
 
 The result is a system where text collaboration remains real-time and cheap, attachment sync remains content-addressed, and snapshots provide deterministic vault recovery without introducing a second complex storage engine.

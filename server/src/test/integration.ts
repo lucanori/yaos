@@ -7,6 +7,7 @@
  * 2. Claim flow or env-based authentication
  * 3. WebSocket sync happy path
  * 4. Basic snapshot operations (if S3 configured)
+ * 5. Hardening checks for oversized schema inputs
  *
  * Prerequisites:
  * - PostgreSQL running and DATABASE_URL configured
@@ -25,7 +26,10 @@
  */
 
 import type { Server as BunServerType, ServerWebSocket } from "bun";
+import * as encoding from "lib0/encoding";
 import { YaosServer } from "../bun";
+import { readOptionalS3Config } from "../s3-config";
+import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
 
 // -------------------------------------------------------------------
@@ -38,15 +42,7 @@ const TEST_SYNC_TOKEN = process.env.SYNC_TOKEN;
 const TEST_VAULT_ID = `test-vault-${Date.now().toString(36)}`;
 
 // S3 config (optional - tests will skip blob/snapshot tests if not configured)
-const S3_CONFIG = process.env.S3_ENDPOINT
-	? {
-			endpoint: process.env.S3_ENDPOINT,
-			region: process.env.S3_REGION ?? "us-east-1",
-			bucket: process.env.S3_BUCKET ?? "yaos-test",
-			accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-			secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-		}
-	: undefined;
+const S3_CONFIG = readOptionalS3Config({ defaultBucket: "yaos-test" });
 
 // -------------------------------------------------------------------
 // Test Framework
@@ -168,6 +164,13 @@ function waitForMessage(ws: WebSocket, timeoutMs = 5000): Promise<WebSocketMessa
 	});
 }
 
+function sendYjsUpdate(ws: WebSocket, update: Uint8Array): void {
+	const encoder = encoding.createEncoder();
+	encoding.writeVarUint(encoder, 0);
+	syncProtocol.writeUpdate(encoder, update);
+	ws.send(encoding.toUint8Array(encoder));
+}
+
 // -------------------------------------------------------------------
 // Test Suite
 // -------------------------------------------------------------------
@@ -269,7 +272,7 @@ async function runTests() {
 
 			await test("Double claim is rejected", async () => {
 				const response = await httpPost("/claim", {
-					token: `another-token-${Date.now()}`,
+					token: `another-token-${Date.now()}-${"y".repeat(32)}`,
 				});
 				
 				assertEqual(response.status, 403, "Second claim should be rejected");
@@ -333,14 +336,8 @@ async function runTests() {
 			
 			// Get update
 			const update = Y.encodeStateAsUpdate(doc1);
-			
-			// Send sync step 1 (client sends its state)
-			const syncMessage = new Uint8Array(1 + update.length);
-			syncMessage[0] = 0; // Sync message type
-			syncMessage.set(update, 1);
-			
-			ws1.send(syncMessage);
-			
+			sendYjsUpdate(ws1, update);
+
 			// Give server time to process
 			await new Promise((resolve) => setTimeout(resolve, 200));
 			
@@ -401,9 +398,32 @@ async function runTests() {
 			// Give server time to record trace
 			await new Promise((resolve) => setTimeout(resolve, 200));
 			
-			const response = await httpGet(`/${TEST_VAULT_ID}/debug/recent`, authToken);
-			// Endpoint may not exist in current implementation, that's ok
-			assert([200, 404].includes(response.status), "Should return 200 or 404");
+			const response = await httpGet(`/vault/${TEST_VAULT_ID}/debug/recent`, authToken);
+			assertEqual(response.status, 200, "Should return 200");
+			const body = await response.json() as { recent?: Array<{ event?: string }> };
+			assert(Array.isArray(body.recent), "recent should be an array");
+		});
+
+		await test("Oversized schema rejection is traced safely", async () => {
+			const hugeSchema = "x".repeat(4_096);
+			const response = await httpGet(
+				`/vault/sync/${encodeURIComponent(TEST_VAULT_ID)}?schemaVersion=${hugeSchema}`,
+				authToken,
+			);
+			assertEqual(response.status, 426, "Huge schema request should be rejected");
+
+			const debugResponse = await httpGet(`/vault/${TEST_VAULT_ID}/debug/recent`, authToken);
+			assertEqual(debugResponse.status, 200, "Debug endpoint should stay available");
+			const debugBody = await debugResponse.json() as {
+				recent?: Array<{ event?: string; rawSchema?: unknown }>;
+			};
+			const recent = Array.isArray(debugBody.recent) ? debugBody.recent : [];
+			const rejection = recent.find((entry) => entry?.event === "ws-rejected");
+			assert(Boolean(rejection), "Rejected schema request should be traced");
+			assert(
+				typeof rejection?.rawSchema === "string" && rejection.rawSchema.length < hugeSchema.length,
+				"rawSchema should be truncated before persistence",
+			);
 		});
 
 		// =================================================================
@@ -439,10 +459,7 @@ async function runTests() {
 				idToText.set(fileId, ytext);
 				
 				const update = Y.encodeStateAsUpdate(doc);
-				const syncMessage = new Uint8Array(1 + update.length);
-				syncMessage[0] = 0;
-				syncMessage.set(update, 1);
-				ws.send(syncMessage);
+				sendYjsUpdate(ws, update);
 				
 				await new Promise((resolve) => setTimeout(resolve, 300));
 				ws.close();

@@ -25,11 +25,13 @@ This was the architectural inflection point: we stopped treating persistence lik
 We implemented a two-layer persistence model in [`server/src/chunkedDocStore.ts`](../server/src/chunkedDocStore.ts):
 
 1. Checkpoint layer
+
 - full-state snapshot, chunked at 512 KiB
 - versioned manifest + pointer indirection
 - persisted checkpoint state vector bytes with length and SHA-256
 
-2. Journal layer
+1. Journal layer
+
 - coalesced delta segments appended in sequence
 - per-segment manifests + chunked payloads + SHA-256
 - global journal metadata (`nextSeq`, `entryCount`, `totalBytes`)
@@ -45,6 +47,7 @@ In [`server/src/server.ts`](../server/src/server.ts), `onSave()` now:
 3. Computes `delta = Y.encodeStateAsUpdate(doc, baselineStateVector)`.
 4. Appends delta to journal.
 5. Compacts to checkpoint when journal crosses either threshold:
+
 - more than 50 entries, or
 - more than 1 MiB total journal bytes.
 
@@ -128,4 +131,4 @@ The storage engine now has:
 - strict integrity validation
 - serialized persistence ordering
 
-This is the foundation for a production-grade monolithic CRDT backend on Cloudflare Workers.
+This is the foundation for a production-grade monolithic CRDT backend on Bun.

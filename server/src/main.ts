@@ -1,4 +1,5 @@
 import { YaosServer } from "./bun";
+import { readOptionalS3Config } from "./s3-config";
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const databaseUrl = process.env.DATABASE_URL;
@@ -10,15 +11,7 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-const s3Config = process.env.S3_ENDPOINT
-  ? {
-      endpoint: process.env.S3_ENDPOINT,
-      region: process.env.S3_REGION ?? "us-east-1",
-      bucket: process.env.S3_BUCKET ?? "yaos",
-      accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-    }
-  : undefined;
+const s3Config = readOptionalS3Config();
 
 const server = new YaosServer({
   port,

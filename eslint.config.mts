@@ -36,7 +36,8 @@ export default tseslint.config(
 		files: ["server/src/**/*.ts"],
 		languageOptions: {
 			globals: {
-				...globals.serviceworker,
+				...globals.browser,
+				...globals.node,
 			},
 			parserOptions: {
 				project: "./server/tsconfig.json",
@@ -48,8 +49,6 @@ export default tseslint.config(
 		"node_modules",
 		"dist",
 		"server/dist",
-		"server/.wrangler",
-		"server/.partykit",
 		"tests",
 		"manifest.json",
 		"esbuild.config.mjs",

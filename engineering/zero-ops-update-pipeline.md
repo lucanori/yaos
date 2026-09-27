@@ -1,92 +1,57 @@
-# RFC: Zero-Ops Update Pipeline for Detached Cloudflare Forks
+# Server update pipeline for self-hosted installs
 
-Status: Implemented  
+Status: implemented
 Owner: YAOS  
-Scope: Server update lifecycle for Deploy-to-Cloudflare YAOS servers
+Scope: Server update lifecycle for self-hosted Bun installs
 
-## Problem: the Day 2 trap
+## Problem
 
-YAOS uses Cloudflare's Deploy button to optimize for a 60-second setup. That flow works well for onboarding, but creates a lifecycle problem:
+YAOS now ships as a self-hosted server. Updates should stay simple for operators and avoid hidden platform coupling.
 
-1. The deploy flow creates a detached user repository.
-2. Cloudflare strips `.github/workflows` during clone.
-3. Without workflows, users have no update pipeline in their generated repo.
+## Current update flow
 
-For a stateful Durable Object + SQLite backend, this is a critical Day 2 issue, not just DX polish.
+### Bun install
+
+```bash
+cd server
+git pull
+bun install
+bun run db:migrate
+bun run dev
+```
+
+### Docker install
+
+Rebuild the image, then restart the container with the same environment file.
+
+```bash
+# From the repository root
+cp deployment/ops/.env.example deployment/ops/.env
+docker build -f deployment/ops/Dockerfile -t yaos-server .
+docker run --env-file deployment/ops/.env -p 3000:3000 yaos-server
+```
 
 ## Constraints
 
-The update path must preserve consumer-grade UX while protecting user data:
+- No terminal-free update magic.
+- No remote self-mutation by cloud provider APIs.
+- No dependency on serverless deploy flows.
+- Keep update steps explicit and reversible.
 
-- No terminal requirement.
-- No PAT/OAuth token setup in the plugin.
-- No server self-mutation via Cloudflare API credentials.
-- No dependence on re-clicking Deploy as an update primitive.
-- Must preserve existing Worker identity and DO bindings.
+## Safety gates
 
-## Architecture
+### Migration gate
 
-### Phase 1: Day 1 install
+If a release requires a manual migration, stop before restart and follow release notes.
 
-Users install via Deploy to Cloudflare. We keep this path because onboarding speed matters.
+### Compatibility guard
 
-### Phase 2: bootstrap the updater once
+Server exposes compatibility metadata via `/api/capabilities`. Plugin should block only incompatible combinations.
 
-Because workflows are stripped during deploy clone, YAOS bootstraps them using a GitHub deep-link:
+### Metadata safety
 
-- Plugin collects the generated repo URL.
-- Plugin opens a pre-filled GitHub file creation URL for `.github/workflows/yaos-ops.yml`.
-- User clicks **Commit changes** once.
+Update metadata should be patch-based so a new device cannot wipe existing update state.
 
-This gives the repo an update entrypoint without terminal or PAT setup.
+## Historical note
 
-### Phase 3: centralized execution
-
-`yaos-ops.yml` is intentionally small and dispatch-only. It calls a reusable workflow hosted in the upstream YAOS repo:
-
-- update action: pull release artifact and apply
-- revert action: revert last update commit
-
-Keeping logic centralized allows hotfixing updater behavior without asking every user to edit local workflow files.
-
-## Update mechanism
-
-YAOS updates the server by applying a release artifact (`yaos-server.zip`) into the generated deployment repo, committing, and pushing. Cloudflare redeploys from that commit.
-
-This avoids upstream monorepo merge complexity and keeps rollback straightforward.
-
-## Safety valves
-
-### 1) Migration gate (hard stop)
-
-Updater reads `yaos-server-manifest.json`. If `migrationRequired: true`, automatic update aborts with a clear error and manual migration instruction.
-
-### 2) Wrangler drift warning
-
-Updater compares release `wrangler.toml` expectations against local config and warns when required bindings/vars are missing.
-
-### 3) Compatibility guard
-
-Server exposes compatibility metadata via `/api/capabilities`. Plugin blocks only incompatible combinations. Legacy/missing version metadata does not hard-block sync.
-
-## Metadata ownership and multi-device safety
-
-Updater metadata (`updateRepoUrl`, `updateRepoBranch`, provider) is persisted server-side and synchronized safely:
-
-- Plugin does not push empty metadata.
-- Server update-metadata writes use patch semantics (null does not clear existing metadata).
-- New devices hydrate local settings from server capabilities.
-
-This prevents "fresh device wipes updater config" regressions.
-
-## Why not re-click Deploy?
-
-Deploy is an install primitive, not an in-place update primitive. Re-deploy can create a new project path and risks orphaning user state if misused. YAOS update execution therefore happens at the Git layer.
-
-## User-facing behavior summary
-
-- One-time: initialize updater from plugin settings.
-- Normal update: click **Open update action**, run workflow with `update`.
-- Rollback: run workflow with `revert`.
-- Migration-required release: workflow fails safely with explicit guidance.
-
+Older YAOS drafts used a detached deploy repo. That flow is legacy only and no longer describes the primary server path.

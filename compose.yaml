@@ -1,0 +1,125 @@
+services:
+  yaos-app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: yaos-app
+    hostname: yaos-app
+    user: bun
+    working_dir: /app/server
+    environment:
+      DATABASE_URL: postgresql://yaos:${POSTGRES_PASSWORD}@postgres:5432/yaos
+      PORT: "3000"
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      SYNC_TOKEN: ${SYNC_TOKEN:-}
+      YAOS_CANONICAL_REPO: kavinsood/yaos
+    env_file:
+      - path: ./.env
+        required: false
+    ports:
+      - 127.0.0.1:3000:3000
+    expose:
+      - "3000"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - yaos-edge
+      - yaos-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/capabilities >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.50"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    privileged: false
+    labels:
+      com.yaos.role: app
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: "10m"
+
+  postgres:
+    image: postgres:18-alpine@sha256:52098013b4b64a746626437d38afc03cabff6cdeb4d3d92e2342aa95f0ce56ea
+    container_name: yaos-postgres
+    hostname: postgres
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB: yaos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: yaos
+    env_file:
+      - path: ./.env
+        required: false
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - yaos-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,size=16m
+    networks:
+      - yaos-backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yaos -d yaos -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.75"
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    cap_drop:
+      - ALL
+    read_only: true
+    privileged: false
+    labels:
+      com.yaos.role: postgres
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: "10m"
+
+networks:
+  yaos-edge:
+    driver: bridge
+  yaos-backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  yaos-postgres-data:
